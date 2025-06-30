@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <!-- Meta Tags -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Dreams POS is a powerful Bootstrap based Inventory Management Admin Template designed for businesses, offering seamless invoicing, project tracking, and estimates.">
+    <meta name="keywords" content="inventory management, admin dashboard, bootstrap template, invoicing, estimates, business management, responsive admin, POS system">
+    <meta name="author" content="Dreams Technologies">
+    <meta name="robots" content="index, follow">
+    <title>Dreams POS - Inventory Management & Admin Dashboard Template</title>
+
+    <!-- Favicon -->
+    <link rel="shortcut icon" type="image/x-icon" href="assets/img/favicon.png">
+
+    <!-- Apple Touch Icon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
+    
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+    
+    <!-- animation CSS -->
+    <link rel="stylesheet" href="assets/css/animate.css">
+
+    <!-- Select2 CSS -->
+    <link rel="stylesheet" href="assets/plugins/select2/css/select2.min.css">
+
+    <!-- Datatable CSS -->
+    <link rel="stylesheet" href="assets/css/dataTables.bootstrap5.min.css">
+
+    <!-- Datetimepicker CSS -->
+    <link rel="stylesheet" href="assets/css/bootstrap-datetimepicker.min.css">
+
+    <!-- Summernote CSS -->
+    <link rel="stylesheet" href="assets/plugins/summernote/summernote-bs4.min.css">
+    
+    <!-- Fontawesome CSS -->
+    <link rel="stylesheet" href="assets/plugins/fontawesome/css/fontawesome.min.css">
+    <link rel="stylesheet" href="assets/plugins/fontawesome/css/all.min.css">
+
+    <!-- Tabler Icon CSS -->
+    <link rel="stylesheet" href="assets/plugins/tabler-icons/tabler-icons.min.css">
+    
+    <!-- Color Picker Css -->
+<link rel="stylesheet" href="assets/plugins/%40simonwep/pickr/themes/nano.min.css">
+
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="assets/css/style.css">
+    
+</head>
+<body>
+    
+    <div id="global-loader" >
+        <div class="whirly-loader"> </div>
+    </div>
+
+        
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+        <%- include('../partials/header') %>
+
+        <div class="page-wrapper">
+            <div class="content">
+                <div class="page-header">
+                    <div class="add-item d-flex">
+                        <div class="page-title">
+                            <h4>Sore List</h4>
+                            <h6>Manage Your Store</h6>
+                        </div>
+                    </div>
+                    <ul class="table-top-head">
+                        <li>
+                            <a data-bs-toggle="tooltip" data-bs-placement="top" title="Pdf"><img src="assets/img/icons/pdf.svg" alt="img"></a>
+                        </li>
+                        <li>
+                            <a data-bs-toggle="tooltip" data-bs-placement="top" title="Excel"><img src="assets/img/icons/excel.svg" alt="img"></a>
+                        </li>
+                        <li>
+                            <a href="/manageParkingStore" data-bs-toggle="tooltip" data-bs-placement="top" title="Refresh"><i class="ti ti-refresh"></i></a>
+                        </li>
+                        <li>
+                            <a data-bs-toggle="tooltip" data-bs-placement="top" title="Collapse" id="collapse-header"><i class="ti ti-chevron-up"></i></a>
+                        </li>
+                    </ul>
+                    <div class="page-btn">
+						<a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#add-category"><i class="ti ti-circle-plus me-1"></i>Add Store</a>
+					</div>
+                </div>
+
+                <!-- /product list -->
+                <div class="card p-4">
+                    <div class="w-100">
+                        <div class="page-title mb-3">
+                        <h4 id="pageHeading" class="text-2xl font-bold">Add Stock To Parking Store</h4>
+                        </div>
+
+                        <form action="/addParkingStock" method="post">
+                        <div class="row">
+                            <!-- Branch -->
+                            <div class="col-lg-4 col-md-6 col-sm-12">
+                                <div class="mb-3">
+                                    <label class="form-label" for="branchSelector">Your Branch<span class="text-danger ms-1">*</span></label>
+                                    <select id="branchSelector" name="branch"
+                                      class="select">
+                                      <option value="<%= user.branch._id %>" selected>
+                                        <%= user.branch.branch_name %>
+                                      </option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Date -->
+                            <div class="col-lg-4 col-md-6 col-sm-12">
+                                <div class="mb-3">
+                                    <label class="form-label">Date<span class="text-danger ms-1">*</span></label>
+                                    <div class="input-groupicon calender-input">
+                                    <input id="payment_date" name="date" type="date" class="form-control" placeholder="Choose">
+                                    </div>
+                                    <script>
+                                    const today = new Date().toISOString().split('T')[0];
+                                    document.getElementById('payment_date').value = today;
+                                    </script>
+                                </div>
+                            </div>
+
+                            <!-- Select Parking Store -->
+                            <div class="col-lg-4 col-md-6 col-sm-12">
+                            <div class="mb-3 add-product">
+                                <label class="form-label">Select Parking Store<span class="text-danger ms-1">*</span></label>
+                                <div class="row">
+                                <div class="col-lg-10 col-sm-10 col-10">
+                                    <% if (parkingStores && parkingStores.length > 0) { %>
+                                    <select name="parkingStoreId" required class="select form-control">
+                                    <option value="" disabled selected>Select Parking Store</option>
+                                    <% parkingStores.forEach(store => { %>
+                                    <option value="<%= store._id %>"><%= store.storeName %></option>
+                                    <% }) %>
+                                    </select>
+                                    <% } else { %>
+                                    <p class="text-red-500">No parking stores available for this branch.</p>
+                                    <% } %>
+                                </div>
+                                </div>
+                            </div>
+                            </div>
+
+                            <!-- Select Action -->
+                            <div class="col-lg-4 col-md-6 col-sm-12">
+                            <div class="mb-3 add-product">
+                                <label class="form-label" for="stockMode">Select Action<span class="text-danger ms-1">*</span></label>
+                                <div class="row">
+                                <div class="col-lg-10 col-sm-10 col-10">
+                                    <select id="stockMode" name="mode" class="form-control">
+                                    <option value="add" selected>Add Stock</option>
+                                    <option value="move">Move Out Stock</option>
+                                    </select>
+                                </div>
+                                </div>
+                            </div>
+                            </div>
+
+                            <!-- Reference -->
+                            <div class="col-lg-4 col-md-6 col-sm-12">
+                            <div class="mb-3">
+                                <label class="form-label">Reference<span class="text-danger ms-1">*</span></label>
+                                <input type="text" class="form-control">
+                            </div>
+                            </div>
+                        </div>
+
+                        <!-- Product Table -->
+                        <div class="row">
+                            <div class="col-lg-12">
+                            <div class="table-responsive mt-4">
+                                <table class="table table-bordered datanew" id="variantTable">
+                                <thead>
+                                    <tr>
+                                    <th>Product</th>
+                                    <th>Unit Code</th>
+                                    <th>Supplier Price(₦)</th>
+                                    <th>Sell Price(₦)</th>
+                                    <th>InStock</th>
+                                    <th>QTY</th>
+                                    <th>Delete</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="variantTableBody">
+                                    <tr>
+                                    <td class="p-2">
+                                        <input type="text" autocomplete="off" id="searchProduct" placeholder="Search Product"
+                                        class="searchProduct w-100 border rounded px-2 py-1" />
+                                        <div id="searchResults"
+                                        class="mt-2 bg-white border border-gray-300 rounded-md shadow-md max-h-60 overflow-y-auto hidden absolute w-100">
+                                        </div>
+                                        <input type="hidden" name="product[]" class="productInput" />
+                                        <input type="hidden" name="productId[]" class="productIdInput" />
+                                    </td>
+                                    <td class="p-2"><select name="unitCode[]" id="unitCode" class="unitCode select form-control"></select></td>
+                                    <td class="p-2"><input type="number" id="supplierPrice" readonly name="supplierPrice[]" placeholder="Supplier Price"
+                                        class="form-control" /></td>
+                                    <td class="p-2"><input type="number" id="sellPrice" readonly name="sellPrice[]" placeholder="Sell Price"
+                                        class="form-control" /></td>
+                                    <td class="p-2"><input type="number" id="inStock" disabled name="inStock[]" placeholder="In Stock"
+                                        class="form-control" /></td>
+                                    <td class="p-2"><input type="number" name="quantity[]" placeholder="Quantity" class="form-control" /></td>
+                                    <td class="p-2">
+                                        <button type="button" class="deleteRowBtn btn btn-sm btn-danger">
+                                        <i class="fa fa-trash"></i>
+                                        </button>
+                                    </td>
+                                    </tr>
+                                </tbody>
+                                </table>
+                            </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="mt-4 text-end">
+                            <button type="submit" class="btn btn-primary">
+                            <i class="fa-solid fa-paper-plane"></i> Add
+                            </button>
+                        </div>
+
+                        <script>
+                        let currentMode = 'add'; // default
+
+                        document.getElementById('stockMode').addEventListener('change', function () {
+                            currentMode = this.value;
+
+                            document.querySelectorAll('#variantTableBody tr').forEach(row => {
+                            row.querySelector('.searchProduct').value = '';
+                            row.querySelector('.productInput').value = '';
+                            row.querySelector('.productIdInput').value = '';
+                            row.querySelector('.unitCode').innerHTML = '';
+                            row.querySelector('.supplierPrice').value = '';
+                            row.querySelector('.sellPrice').value = '';
+                            row.querySelector('.inStock').value = '';
+                            });
+                        });
+                        </script>
+
+                        <script>
+                        let selectedProductGlobal = null;
+
+                        function initializeSearch(row) {
+                            const searchInput = row.querySelector('.searchProduct');
+                            const searchResults = row.querySelector('#searchResults');
+                            const branchSelector = document.getElementById('branchSelector');
+                            const unitCodeSelect = row.querySelector('.unitCode');
+                            const supplierPriceInput = row.querySelector('.supplierPrice');
+                            const sellPriceInput = row.querySelector('.sellPrice');
+                            const inStockInput = row.querySelector('.inStock');
+
+                            searchInput.addEventListener('input', function () {
+                            const query = this.value.trim();
+                            const branchId = branchSelector ? branchSelector.value : null;
+
+                            if (query.length < 1 || !branchId) {
+                                searchResults.classList.add('hidden');
+                                return;
+                            }
+
+                            const searchUrl =
+                                currentMode === 'move'
+                                ? `/searchParkingStock?query=${encodeURIComponent(query)}&branchId=${branchId}`
+                                : `/searchProduct?query=${encodeURIComponent(query)}&branchId=${branchId}`;
+
+                            fetch(searchUrl)
+                                .then(res => res.json())
+                                .then(data => {
+                                const products = data.products;
+
+                                if (!products || products.length === 0) {
+                                    searchResults.classList.add('hidden');
+                                    searchResults.innerHTML = '';
+                                    return;
+                                }
+
+                                searchResults.innerHTML = '';
+
+                                products.forEach(product => {
+                                    const displayName = currentMode === 'move'
+                                        ? `${product.product?.product || 'Unnamed Product'} - ${product.unitCode || ''}`
+                                        : `${product.product} - ${product.product_detail || ''}`;
+
+
+                                    const item = document.createElement('div');
+                                    item.textContent = displayName;
+                                    item.className = "p-2 hover:bg-green-100 cursor-pointer";
+
+                                    item.addEventListener('click', () => {
+                                    selectedProductGlobal = product;
+
+                                    const name = currentMode === 'move'
+                                        ? product.product?.product
+                                        : product.product;
+
+                                    const productId = currentMode === 'move'
+                                        ? product.product?._id
+                                        : product._id;
+
+                                    searchInput.value = name || '';
+                                    searchResults.classList.add('hidden');
+
+                                    const productInput = row.querySelector('.productInput');
+                                    const productIdInput = row.querySelector('.productIdInput');
+
+                                    if (productInput && productIdInput) {
+                                        productInput.value = name || '';
+                                        productIdInput.value = productId || '';
+                                    }
+
+                                    unitCodeSelect.innerHTML = '';
+                                    const unitOption = document.createElement('option');
+
+                                    if (currentMode === 'move') {
+                                        unitOption.value = product.unitCode;
+                                        unitOption.textContent = `${product.unitCode} - In stock: ${product.quantity}`;
+                                        unitCodeSelect.appendChild(unitOption);
+
+                                        supplierPriceInput.value = '';
+                                        sellPriceInput.value = '';
+                                        inStockInput.value = product.quantity;
+                                    } else {
+                                        if (product.variants && product.variants.length > 0) {
+                                        const firstVariant = product.variants[0];
+                                        unitOption.value = firstVariant.unitCode;
+                                        unitOption.textContent = `${firstVariant.unitCode} - In stock: ${firstVariant.quantity}`;
+                                        unitCodeSelect.appendChild(unitOption);
+
+                                        supplierPriceInput.value = product.supplierPrice;
+                                        sellPriceInput.value = firstVariant.sellPrice;
+                                        inStockInput.value = firstVariant.quantity;
+                                        row.dataset.variantId = firstVariant._id;
+                                        } else {
+                                        supplierPriceInput.value = '';
+                                        sellPriceInput.value = '';
+                                        inStockInput.value = '';
+                                        }
+                                    }
+                                    });
+
+                                    searchResults.appendChild(item);
+                                });
+
+                                searchResults.classList.remove('hidden');
+                                })
+                                .catch(err => {
+                                console.error('Search failed', err);
+                                });
+                            });
+                        }
+
+                        function attachDeleteEvent(row) {
+                            const deleteBtn = row.querySelector('.deleteRowBtn');
+                            deleteBtn?.addEventListener('click', () => {
+                            const tbody = document.getElementById('variantTableBody');
+                            if (tbody.rows.length > 1) {
+                                row.remove();
+                            } else {
+                                alert('At least one row must remain.');
+                            }
+                            });
+                        }
+
+                        function attachQtyEvent(row) {
+                            const qtyInput = row.querySelector('.qtyInput');
+                            qtyInput?.addEventListener('input', () => {
+                            const tbody = document.getElementById('variantTableBody');
+                            const isLastRow = row === tbody.lastElementChild;
+
+                            if (qtyInput.value && isLastRow) {
+                                const newRow = row.cloneNode(true);
+
+                                newRow.querySelector('.searchProduct').value = '';
+                                newRow.querySelector('.productInput').value = '';
+                                newRow.querySelector('.productIdInput').value = '';
+                                newRow.querySelector('.unitCode').innerHTML = '';
+                                newRow.querySelector('.supplierPrice').value = '';
+                                newRow.querySelector('.sellPrice').value = '';
+                                newRow.querySelector('.inStock').value = '';
+                                newRow.querySelector('.qtyInput').value = '';
+                                newRow.querySelector('#searchResults').innerHTML = '';
+                                newRow.querySelector('#searchResults').classList.add('hidden');
+                                delete newRow.dataset.variantId;
+
+                                tbody.appendChild(newRow);
+
+                                initializeSearch(newRow);
+                                attachDeleteEvent(newRow);
+                                attachQtyEvent(newRow);
+                            }
+                            });
+                        }
+
+                        const firstRow = document.querySelector('#variantTableBody tr');
+                        initializeSearch(firstRow);
+                        attachDeleteEvent(firstRow);
+                        attachQtyEvent(firstRow);
+                        </script>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
+                <p class="mb-0">2025 &copy; AJELIELE. All Right Reserved</p>
+                <p>Developed by <a href="javascript:void(0);" class="text-primary">Tech Mayor Groups</a></p>
+            </div>
+        </div>
+    </div>
+    <!-- /Main Wrapper -->
+<script>
+    document.getElementById('stockMode').addEventListener('change', function () {
+        const heading = document.getElementById('pageHeading');
+        const form = document.querySelector('form');
+        const submitButton = form.querySelector('button[type="submit"]');
+
+        if (this.value === 'move') {
+        heading.textContent = 'Move Stock From Parking Store';
+        form.action = '/moveOutParkingStock';
+        submitButton.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Move';
+        } else {
+        heading.textContent = 'Add Stock To Parking Store';
+        form.action = '/addParkingStock';
+        submitButton.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Add';
+        }
+    });
+</script>
+
+        
+    <!-- jQuery -->
+    <script src="assets/js/jquery-3.7.1.min.js" type="2f428d51b98b47d240805a0a-text/javascript"></script>
+
+    <!-- Feather Icon JS -->
+    <script src="assets/js/feather.min.js" type="2f428d51b98b47d240805a0a-text/javascript"></script>
+
+    <!-- Slimscroll JS -->
+    <script src="assets/js/jquery.slimscroll.min.js" type="2f428d51b98b47d240805a0a-text/javascript"></script>
+
+    <!-- Datatable JS -->
+    <script src="assets/js/jquery.dataTables.min.js" type="2f428d51b98b47d240805a0a-text/javascript"></script>
+    <script src="assets/js/dataTables.bootstrap5.min.js" type="2f428d51b98b47d240805a0a-text/javascript"></script>
+
+    <!-- Datetimepicker JS -->
+    <script src="assets/js/moment.min.js" type="2f428d51b98b47d240805a0a-text/javascript"></script>
+    <script src="assets/js/bootstrap-datetimepicker.min.js" type="2f428d51b98b47d240805a0a-text/javascript"></script>
+    
+    <!-- Bootstrap Core JS -->
+    <script src="assets/js/bootstrap.bundle.min.js" type="2f428d51b98b47d240805a0a-text/javascript"></script>
+
+    <!-- Summernote JS -->
+    <script src="assets/plugins/summernote/summernote-bs4.min.js" type="2f428d51b98b47d240805a0a-text/javascript"></script>
+
+    <!-- Select2 JS -->
+    <script src="assets/plugins/select2/js/select2.min.js" type="2f428d51b98b47d240805a0a-text/javascript"></script>
+
+
+    <!-- Color Picker JS -->
+    <script src="assets/plugins/%40simonwep/pickr/pickr.es5.min.js" type="2f428d51b98b47d240805a0a-text/javascript"></script>
+
+    <!-- Custom JS -->
+    <script src="assets/js/theme-colorpicker.js" type="2f428d51b98b47d240805a0a-text/javascript"></script>
+    <script src="assets/js/script.js" type="2f428d51b98b47d240805a0a-text/javascript"></script>
+
+
+<script src="../../cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="2f428d51b98b47d240805a0a-|49" defer></script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"951ebab5ec84d7e3","version":"2025.6.2","serverTiming":{"name":{"cfExtPri":true,"cfEdge":true,"cfOrigin":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}},"token":"3ca157e612a14eccbb30cf6db6691c29","b":1}' crossorigin="anonymous"></script>
+</body>
+</html>

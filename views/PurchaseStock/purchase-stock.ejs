@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+	<!-- Meta Tags -->
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="Dreams POS is a powerful Bootstrap based Inventory Management Admin Template designed for businesses, offering seamless invoicing, project tracking, and estimates.">
+	<meta name="keywords" content="inventory management, admin dashboard, bootstrap template, invoicing, estimates, business management, responsive admin, POS system">
+	<meta name="author" content="Dreams Technologies">
+	<meta name="robots" content="index, follow">
+	<title>Dreams POS - Inventory Management & Admin Dashboard Template</title>
+
+	<!-- Favicon -->
+	<link rel="shortcut icon" type="image/x-icon" href="assets/img/favicon.png">
+
+	<!-- Apple Touch Icon -->
+	<link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
+
+	<!-- Bootstrap CSS -->
+	<link rel="stylesheet" href="assets/css/bootstrap.min.css">
+
+	<!-- Datetimepicker CSS -->
+	<link rel="stylesheet" href="assets/css/bootstrap-datetimepicker.min.css">
+
+	<!-- animation CSS -->
+	<link rel="stylesheet" href="assets/css/animate.css">
+
+	<!-- Select2 CSS -->
+	<link rel="stylesheet" href="assets/plugins/select2/css/select2.min.css">
+
+	<!-- Summernote CSS -->
+	<link rel="stylesheet" href="assets/plugins/summernote/summernote-bs4.min.css">
+
+	<!-- Datatable CSS -->
+	<link rel="stylesheet" href="assets/css/dataTables.bootstrap5.min.css">
+
+	<!-- Fontawesome CSS -->
+	<link rel="stylesheet" href="assets/plugins/fontawesome/css/fontawesome.min.css">
+	<link rel="stylesheet" href="assets/plugins/fontawesome/css/all.min.css">
+
+	<!-- Tabler Icon CSS -->
+	<link rel="stylesheet" href="assets/plugins/tabler-icons/tabler-icons.min.css">
+
+	<!-- Color Picker Css -->
+	<link rel="stylesheet" href="assets/plugins/%40simonwep/pickr/themes/nano.min.css">
+
+	<!-- Main CSS -->
+	<link rel="stylesheet" href="assets/css/style.css">
+
+</head>
+
+<body>
+
+	<div id="global-loader">
+		<div class="whirly-loader"> </div>
+	</div>
+
+	<!-- Main Wrapper -->
+	<div class="main-wrapper">
+
+		 <%- include('../partials/header') %>
+
+		<div class="page-wrapper">
+			<div class="content">
+				<div class="page-header transfer">
+					<div class="add-item d-flex">
+						<div class="page-title">
+							<h4 class="fw-bold">Purchase</h4>
+							<h6>Manage your purchases</h6>
+						</div>
+					</div>
+					<ul class="table-top-head">
+						<li>
+							<a data-bs-toggle="tooltip" data-bs-placement="top" title="Pdf"><img
+									src="assets/img/icons/pdf.svg" alt="img"></a>
+						</li>
+						<li>
+							<a data-bs-toggle="tooltip" data-bs-placement="top" title="Excel"><img
+									src="assets/img/icons/excel.svg" alt="img"></a>
+						</li>
+						<li>
+							<a href="/purchase-stock" data-bs-toggle="tooltip" data-bs-placement="top" title="Refresh"><i
+									data-feather="rotate-ccw" class="feather-rotate-ccw"></i></a>
+						</li>		
+						<li>
+							<a data-bs-toggle="tooltip" data-bs-placement="top" title="Collapse" id="collapse-header"><i class="ti ti-chevron-up"></i></a>
+						</li>
+					</ul>
+					<div class="d-flex purchase-pg-btn">
+						<div class="page-btn">
+							<a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#add-purchase"><i
+									data-feather="plus-circle" class="me-1"></i>Add Purchase</a>
+						</div>
+						<div class="page-btn">
+							<a href="/managePurchase" class="btn btn-secondary color"><i
+									data-feather="download" class="me-2"></i>Manage Purchase</a>
+						</div>
+					</div>
+					
+				</div>
+
+				<div class="card">
+					<div class="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
+						<div class="search-set">
+							<div class="search-input">
+								<span class="btn-searchset"><i class="ti ti-search fs-14 feather-search"></i></span>
+							</div>
+						</div>
+						<div class="d-flex table-dropdown my-xl-auto right-content align-items-center flex-wrap row-gap-3">
+							<div class="dropdown">
+								<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
+								Payment Status
+								</a>
+								<ul class="dropdown-menu  dropdown-menu-end p-3">
+									<li>
+										<a href="javascript:void(0);" class="dropdown-item rounded-1">Paid</a>
+									</li>
+									<li>
+										<a href="javascript:void(0);" class="dropdown-item rounded-1">Unpaid</a>
+									</li>
+									<li>
+										<a href="javascript:void(0);" class="dropdown-item rounded-1">Overdue</a>
+									</li>
+								</ul>
+							</div>
+						</div>
+					</div>
+					<div class="card-body p-0">
+						<div class="table-responsive">
+							<table class="table datatable">
+								<thead class="thead-light">
+									<tr>
+										<th>Supplier Name</th>
+										<th>Reference No.</th>
+										<th>Date</th>
+										<th>Total</th>
+										<th>Paid</th>
+										<th>Due</th>
+										<th class="no-sort"></th>
+									</tr>
+								</thead>
+								<tbody>
+									<% if (stock.length > 0) { %>
+										<% stock.forEach(stock => { %>
+									<tr>
+										<td><%= stock.supplier.supplier %></td>
+										<td><%= stock.invoice_number %></td>
+										<td><%= stock.payment_date ? new Date(stock.payment_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' %></td>
+										<td>₦<%= stock.grand_total || 0 %></td>
+										<td>₦<%= stock.paid_amount || 0 %></td>
+										<td>₦<%= (stock.grand_total - stock.paid_amount) || 0 %></td>
+										<td class="action-table-data">
+											<div class="edit-delete-action">
+												<a class="me-2 p-2" href="javascript:void(0);">
+													<i data-feather="eye" class="action-eye"></i>
+												</a>
+												<a class="me-2 p-2" data-bs-toggle="modal" data-bs-target="#edit-purchase">
+													<i data-feather="edit" class="feather-edit"></i>
+												</a>
+												<a data-bs-toggle="modal" data-bs-target="#delete-modal" class="p-2" href="javascript:void(0);">
+													<i data-feather="trash-2" class="feather-trash-2"></i>
+												</a>
+											</div>
+										</td>
+									</tr>
+										<% }) %>
+									<% } %>	
+								
+								</tbody>
+							</table>
+						</div>
+
+					</div>
+				</div>
+				<!-- /product list -->
+			</div>
+			<div class="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
+				<p class="mb-0 text-gray-9">2025 &copy; AJELIELE. All Right Reserved</p>
+				<p>Developed by <a href="javascript:void(0);" class="text-primary">Tech Mayor Groups</a></p>
+			</div>
+		</div>
+	</div>
+	<!-- /Main Wrapper -->
+
+	<!-- Add Purchase -->
+	<div class="modal fade" id="add-purchase">
+		<div class="modal-dialog purchase modal-dialog-centered">
+			<div class="modal-content">
+				<div class="modal-header">
+					<div class="page-title">
+						<h4>Add Purchase</h4>
+					</div>
+					<button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+				</div>
+				<form action="/addReceiveStock" method="post">
+					<div class="modal-body">
+						<div class="row">
+							<div class="col-lg-4 col-md-6 col-sm-12">
+								<div class="mb-3 add-product">
+									<label class="form-label">Supplier Name<span class="text-danger ms-1">*</span></label>
+									<div class="row">
+										<div class="col-lg-10 col-sm-10 col-10">
+										    <% if (suppliers && suppliers.length > 0) { %>
+												<select name="supplier" class="select">
+													<option value="">Select Supplier</option>
+													<% suppliers.forEach(supplier => { %>
+													<option value="<%= supplier._id %>"><%= supplier.supplier %></option>
+													<% }) %>
+												</select>
+												<% } else { %>
+												<p class="text-red-500">No suppliers available.</p>
+												<% } %>
+										</div>
+										<div class="col-lg-2 col-sm-2 col-2 ps-0">
+											<div class="add-icon tab">
+												<a href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#add_customer"><i data-feather="plus-circle" class="feather-plus-circles"></i></a>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div class="col-lg-4 col-md-6 col-sm-12">
+								<div class="mb-3 add-product">
+									<label class="form-label">Branch<span class="text-danger ms-1">*</span></label>
+									<div class="row">
+										<div class="col-lg-10 col-sm-10 col-10">
+											<select class="select">
+												<option> <%= ownerBranch && ownerBranch.branch && ownerBranch.branch.branch_name 
+													? ownerBranch.branch.branch_name 
+													: 'N/A' %>
+												</option>
+											</select>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div class="col-lg-4 col-md-6 col-sm-12">
+								<div class="mb-3">
+									<label class="form-label">Date<span class="text-danger ms-1">*</span></label>
+
+									<div class="input-groupicon calender-input">
+										<input name="payment_date" id="payment_date" type="date" class="form-control p-2" placeholder="dd/mm/yyyy">
+									</div>
+									   <script>
+											const today = new Date().toISOString().split('T')[0];
+											document.getElementById('payment_date').value = today;
+										</script>
+								</div>
+							</div>
+							<div class="col-lg-4 col-sm-12">
+								<div class="mb-3">
+									<label class="form-label">Invoice Number<span class="text-danger ms-1">*</span></label>
+									<input name="invoice_number" id="invoice_number" type="text" class="form-control">
+								</div>
+							</div>
+						</div>
+						<div class="row">
+							<div class="col-lg-12">
+								<div class="modal-body-table mt-3">
+									<div class="table-responsive">
+										<table class="table datatable rounded-1">
+											<thead>
+												<tr>
+													<th class="bg-secondary-transparent p-3">Product</th>
+													<th class="bg-secondary-transparent p-3">Unit</th>
+													<th class="bg-secondary-transparent p-3">Qty</th>
+													<th class="bg-secondary-transparent p-3">Unit Cost(₦)</th>
+													<th class="bg-secondary-transparent p-3">Total Cost(₦)</th>
+													<th class="bg-secondary-transparent p-3">Action</th>
+												</tr>
+											</thead>
+
+											<tbody id="itemTableBody">
+												<tr class="item-row">
+													<td class="p-2 border relative">
+													<input type="text" placeholder="Item Name" name="item_name" class="w-full border rounded px-2 py-1 item-name" autocomplete="off" />
+													<input type="hidden" name="product_id" class="product-id-hidden" />
+													<div class="autocomplete-suggestions absolute z-10 bg-white border mt-1 w-full shadow rounded hidden"></div>
+													</td>
+													<td class="p-2 border">
+													<input type="text" name="unitCode" class="w-full border rounded px-2 py-1 text-sm text-gray-700 unit-code" readonly />
+													</td>
+													<td class="p-2 border">
+													<input type="number" name="item_qty" class="w-full border rounded px-2 py-1 item-qty" />
+													</td>
+													<td class="p-2 border">
+													<input type="number" name="item_rate" class="w-full border rounded px-2 py-1 item-rate" />
+													</td>
+													<td class="p-2 border">
+													<input type="text" value="" class="w-full border bg-gray-100 rounded px-2 py-1 item-total" readonly />
+													</td>
+													<td class="p-2 border text-center">
+													<button type="button" style="background-color: red;" class="bg-red-500 hover:bg-red-600 text-white rounded px-3 py-1 delete-row">Delete</button>
+													</td>
+												</tr>
+											</tbody>
+										</table>
+										<script>
+											document.addEventListener("DOMContentLoaded", function () {
+												const tableBody = document.getElementById("itemTableBody");
+												const grandTotalInput = document.getElementById("grandTotal");
+												const paidAmountInput = document.querySelector("input[name='paid_amount']");
+
+												function calculateRowTotal(row) {
+												const qty = parseFloat(row.querySelector(".item-qty").value) || 0;
+												const rate = parseFloat(row.querySelector(".item-rate").value) || 0;
+												const total = qty * rate;
+												row.querySelector(".item-total").value = total.toFixed(2);
+												calculateGrandTotal();
+												}
+
+												function calculateGrandTotal() {
+												let grandTotal = 0;
+												document.querySelectorAll(".item-total").forEach(input => {
+													grandTotal += parseFloat(input.value) || 0;
+												});
+												grandTotalInput.value = grandTotal.toFixed(2);
+												paidAmountInput.value = grandTotal.toFixed(2);
+												}
+
+												function attachEventListeners(row) {
+												const qtyInput = row.querySelector(".item-qty");
+												const rateInput = row.querySelector(".item-rate");
+												const nameInput = row.querySelector(".item-name");
+												const hiddenIdInput = row.querySelector(".product-id-hidden");
+												const unitCodeInput = row.querySelector(".unit-code");
+												const suggestionBox = row.querySelector(".autocomplete-suggestions");
+
+												qtyInput.addEventListener("input", () => {
+													calculateRowTotal(row);
+													maybeAddNewRow();
+												});
+
+												rateInput.addEventListener("input", () => {
+													calculateRowTotal(row);
+													maybeAddNewRow();
+												});
+
+												row.querySelector(".delete-row").addEventListener("click", () => {
+													if (tableBody.rows.length > 1) {
+													row.remove();
+													calculateGrandTotal();
+													}
+												});
+
+												nameInput.addEventListener("input", function () {
+													const query = this.value;
+													if (query.length < 2) {
+													suggestionBox.innerHTML = '';
+													suggestionBox.classList.add('hidden');
+													return;
+													}
+
+													fetch(`/search-product?q=${encodeURIComponent(query)}`)
+													.then(res => res.json())
+													.then(data => {
+														suggestionBox.innerHTML = '';
+														if (data.length === 0) {
+														suggestionBox.classList.add('hidden');
+														return;
+														}
+
+														data.forEach(item => {
+														const div = document.createElement("div");
+														div.textContent = item.product;
+														div.classList.add("p-2", "hover:bg-blue-100", "cursor-pointer", "text-sm");
+														div.dataset.id = item._id;
+														div.dataset.unitcode = (item.variants && item.variants.length > 0) ? item.variants[0].unitCode : '';
+														div.dataset.supplierprice = item.supplierPrice || "";
+
+														div.addEventListener("mousedown", function () {
+															nameInput.value = item.product;
+															hiddenIdInput.value = item._id;
+															unitCodeInput.value = div.dataset.unitcode;
+															if (item.supplierPrice) {
+															rateInput.value = item.supplierPrice;
+															}
+															calculateRowTotal(row);
+															maybeAddNewRow();
+															suggestionBox.innerHTML = '';
+															suggestionBox.classList.add('hidden');
+														});
+
+														suggestionBox.appendChild(div);
+														});
+
+														suggestionBox.classList.remove('hidden');
+													})
+													.catch(err => console.error("Autocomplete error:", err));
+												});
+
+												nameInput.addEventListener("blur", () => {
+													setTimeout(() => suggestionBox.classList.add("hidden"), 100);
+												});
+												}
+
+												function maybeAddNewRow() {
+												const lastRow = tableBody.lastElementChild;
+												const itemName = lastRow.querySelector(".item-name").value.trim();
+												const qty = lastRow.querySelector(".item-qty").value;
+												const rate = lastRow.querySelector(".item-rate").value;
+
+												if (itemName && qty && rate) {
+													const newRow = lastRow.cloneNode(true);
+													newRow.querySelectorAll("input").forEach(input => {
+													if (!input.classList.contains("product-id-hidden")) {
+														input.value = "";
+													}
+													});
+													newRow.querySelector(".autocomplete-suggestions").innerHTML = '';
+													newRow.querySelector(".autocomplete-suggestions").classList.add("hidden");
+
+													tableBody.appendChild(newRow);
+													attachEventListeners(newRow);
+												}
+												}
+
+												const initialRow = tableBody.querySelector(".item-row");
+												attachEventListeners(initialRow);
+											});
+										</script>
+									</div>
+								</div>
+
+							</div>
+							<div class="row" style="display: flex; flex-direction: column; align-items: flex-end;">
+								<div class="col-lg-3 col-md-6 col-sm-12">
+									<div class="mb-3">
+										<label class="form-label">Grand Total<span class="text-danger ms-1">*</span></label>
+										<input type="text" id="grandTotal" readonly class="form-control bg-gray-100">
+									</div>
+								</div>
+								<div class="col-lg-3 col-md-6 col-sm-12">
+									<div class="mb-3">
+										<label class="form-label">Paid Amount<span class="text-danger ms-1">*</span></label>
+										<input type="text" name="paid_amount" value="0.00" class="form-control">
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn me-2 btn-secondary" data-bs-dismiss="modal">Cancel</button>
+						<button type="submit" class="btn btn-primary">Submit</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+	<!-- /Add Purchase -->
+
+	<!-- Add Supplier -->
+	<div class="modal fade" id="add_customer">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content">
+				<div class="modal-header">
+					<div class="page-title">
+						<h4>Add Supplier</h4>
+					</div>
+					<button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+				</div>
+				<form action="https://dreamspos.dreamstechnologies.com/html/template/purchase-list.html">
+					<div class="modal-body">
+						<div>
+							<label class="form-label">Supplier<span class="text-danger">*</span></label>
+							<input type="text" class="form-control">
+						</div>												
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn me-2 btn-secondary fs-13 fw-medium p-2 px-3 shadow-none" data-bs-dismiss="modal">Cancel</button>
+						<button  type="submit" class="btn btn-primary fs-13 fw-medium p-2 px-3">Add Supplier</button>
+					</div>						
+				</form>
+			</div>
+		</div>
+	</div>
+	<!-- /Add Supplier -->
+
+	<!-- Edit Purchase -->
+	<div class="modal fade" id="edit-purchase">
+		<div class="modal-dialog purchase modal-dialog-centered">
+			<div class="modal-content">
+				<div class="modal-header">
+					<div class="page-title">
+						<h4>Edit Purchase</h4>
+					</div>
+					<button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+				</div>
+				<form action="https://dreamspos.dreamstechnologies.com/html/template/purchase-list.html">
+					<div class="modal-body">
+						<div class="row">
+							<div class="col-lg-4 col-md-6 col-sm-12">
+								<div class="mb-3 add-product">
+									<label class="form-label">Supplier Name<span class="text-danger ms-1">*</span></label>
+									<div class="row">
+										<div class="col-lg-10 col-sm-10 col-10">
+											<select class="select">
+												<option>Select</option>
+												<option>Apex Computers</option>
+												<option>Dazzle Shoes</option>
+												<option>Best Accessories</option>
+											</select>
+										</div>
+										<div class="col-lg-2 col-sm-2 col-2 ps-0">
+											<div class="add-icon tab">
+												<a href="javascript:void(0);"><i data-feather="plus-circle" class="feather-plus-circles"></i></a>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div class="col-lg-4 col-md-6 col-sm-12">
+								<div class="mb-3">
+									<label class="form-label">Date<span class="text-danger ms-1">*</span></label>
+
+									<div class="input-groupicon calender-input">
+										<i data-feather="calendar" class="info-img"></i>
+										<input type="text" class="datetimepicker form-control p-2" placeholder="24 Dec 2024">
+									</div>
+								</div>
+							</div>
+							<div class="col-lg-4 col-sm-12">
+								<div class="mb-3">
+									<label class="form-label">Supplier<span class="text-danger ms-1">*</span></label>
+									<input type="text" class="form-control" value="Elite Retail">
+								</div>
+							</div>
+						</div>
+						<div class="row">
+							<div class="col-lg-12">
+								<div class="mb-3">
+									<label class="form-label">Product<span class="text-danger ms-1">*</span></label>
+									<input type="text" class="form-control" placeholder="Search Product">
+								</div>
+							</div>
+							<div class="col-lg-12">
+							<div class="modal-body-table">
+								<div class="table-responsive">
+									<table class="table">
+										<thead>
+											<tr>
+												<th class="bg-secondary-transparent p-3">Product Name</th>
+												<th class="bg-secondary-transparent p-3">QTY</th>
+												<th class="bg-secondary-transparent p-3">Purchase Price($) </th>
+												<th class="bg-secondary-transparent p-3">Discount($) </th>
+												<th class="bg-secondary-transparent p-3">Tax %</th>
+												<th class="bg-secondary-transparent p-3">Tax Amount($)</th>
+												<th class="text-end bg-secondary-transparent p-3">Unit Cost($)</th>
+												<th class="text-end bg-secondary-transparent p-3">Total Cost ($) </th>
+												
+											</tr>
+										</thead>
+										<tbody>
+											<tr>
+												<td class="p-4">
+													<div class="d-flex align-items-center">
+														<a href="javascript:void(0);" class="avatar avatar-md me-2">
+															<img src="assets/img/products/stock-img-02.png" alt="product">
+														</a>
+														<a href="javascript:void(0);">Nike Jordan</a>
+													</div>
+												</td>
+												<td class="p-4"><div class="product-quantity">
+													<span class="quantity-btn">+<i data-feather="plus-circle" class="plus-circle"></i></span>
+													<input type="text" class="quntity-input" value="10">
+													<span class="quantity-btn"><i data-feather="minus-circle" class="feather-search"></i></span>
+												</div></td>
+												<td class="p-4">300</td>
+												<td class="p-4">50</td>
+												<td class="p-4">0</td>
+												<td class="p-4">0.00</td>
+												<td class="p-4">300</td>
+												<td class="p-4">600</td>
+									
+											</tr>
+										</tbody>
+									</table>
+								</div>
+							</div>
+							</div>
+						</div>
+						<div class="row">
+							<div class="col-lg-12 float-md-right">
+								<div class="total-order m-2 mb-3 ms-auto">
+									<ul class="border-1 rounded-1">
+										<li class="border-0 border-bottom">
+											<h4 class="border-0">Order Tax</h4>
+											<h5>$ 0.00</h5>
+										</li>
+										<li class="border-0 border-bottom">
+											<h4 class="border-0">Discount</h4>
+											<h5>$ 0.00</h5>
+										</li>
+										<li class="border-0 border-bottom">
+											<h4 class="border-0">Shipping</h4>
+											<h5>$ 0.00</h5>
+										</li>
+										<li class="total border-0">
+											<h4 class="border-0">Grand Total</h4>
+											<h5>$1800.00</h5>
+										</li>
+									</ul>
+								</div>
+							</div>
+						</div>
+						<div class="row">
+							<div class="col-lg-3 col-md-6 col-sm-12">
+								<div class="mb-3">
+									<label class="form-label">Order Tax<span class="text-danger ms-1">*</span></label>
+									<input type="text" class="form-control" value="0">
+								</div>
+							</div>
+							<div class="col-lg-3 col-md-6 col-sm-12">
+								<div class="mb-3">
+									<label class="form-label">Discount<span class="text-danger ms-1">*</span></label>
+									<input type="text" class="form-control" value="0">
+								</div>
+							</div>
+							<div class="col-lg-3 col-md-6 col-sm-12">
+								<div class="mb-3">
+									<label class="form-label">Shipping<span class="text-danger ms-1">*</span></label>
+									<input type="text" class="form-control" value="0">
+								</div>
+							</div>
+							<div class="col-lg-3 col-md-6 col-sm-12">
+								<div class="mb-3">
+									<label class="form-label">Status<span class="text-danger ms-1">*</span></label>
+									<select class="select">
+										<option>Select</option>
+										<option>Received</option>
+										<option>Pending</option>
+									</select>
+								</div>
+							</div>
+						</div>
+						<div class="row">
+							
+						<div class="col-lg-12">
+							<div class="mb-3 summer-description-box">
+								<label class="form-label">Description</label>
+								<div id="summernote2">
+									
+								</div>
+								<p class="mt-1">Maximum 60 Words</p>
+							</div>
+						</div>
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn me-2 btn-secondary" data-bs-dismiss="modal">Cancel</button>
+						<button type="submit" class="btn btn-primary">Save Changes </button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+	<!-- /Edit Purchase -->
+
+	<!-- Import Purchase -->
+	<div class="modal fade" id="view-notes">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content">
+				<div class="page-wrapper-new p-0">
+					<div class="content">
+						<div class="modal-header">
+							<div class="page-title">
+								<h4>Import Purchase</h4>
+							</div>
+							<button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+								<span aria-hidden="true">&times;</span>
+							</button>
+						</div>
+						<form action="https://dreamspos.dreamstechnologies.com/html/template/purchase-list.html">
+							<div class="modal-body">
+								<div class="row">
+									<div class="col-lg-6 col-sm-6 col-12">
+										<div class="mb-3">
+											<label class="form-label">Supplier Name<span class="text-danger ms-1">*</span></label>
+											<div class="row">
+												<div class="col-lg-10 col-sm-10 col-10">
+													<select class="select">
+														<option>Select</option>
+														<option>Apex Computers</option>
+														<option>Apex Computers</option>
+													</select>
+												</div>
+												<div class="col-lg-2 col-sm-2 col-2 ps-0">
+													<div class="add-icon tab">
+														<a href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#add_customer"><i data-feather="plus-circle" class="feather-plus-circles"></i></a>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+									<div class="col-lg-6 col-sm-6 col-12">
+										<div class="mb-3">
+											<label class="form-label"> Status<span class="text-danger ms-1">*</span></label>
+											<select class="select">
+												<option>Select</option>
+												<option>Received</option>
+												<option>Ordered</option>
+												<option>Pending</option>
+											</select>
+										</div>
+									</div>
+									<div class="col-lg-12 col-12">
+										<div class="row">
+											<div >
+												<div class="modal-footer-btn download-file">
+													<a href="javascript:void(0)" class="btn btn-submit fs-13 fw-medium">Download Sample File</a>
+												</div>
+											</div>
+										</div>
+									</div>
+									<div class="col-lg-12">
+										<div class="mb-3 image-upload-down">
+											<label class="form-label">	Upload CSV File</label>
+											<div class="image-upload download">
+												<input type="file">
+												<div class="image-uploads">
+													<img src="assets/img/download-img.png" alt="img">
+													<h4>Drag and drop a <span>file to upload</span></h4>
+												</div>
+											</div>
+										</div>
+									</div>
+									<div class="col-lg-4 col-sm-6 col-12">
+										<div class="mb-3">
+											<label class="form-label">Order Tax<span class="text-danger ms-1">*</span></label>
+											<input type="text" class="form-control">
+										</div>
+									</div>
+									<div class="col-lg-4 col-sm-6 col-12">
+										<div class="mb-3">
+											<label class="form-label">Discount<span class="text-danger ms-1">*</span></label>
+											<input type="text" class="form-control">
+										</div>
+									</div>
+									<div class="col-lg-4 col-sm-6 col-12">
+										<div class="mb-3">
+											<label class="form-label">Shipping<span class="text-danger ms-1">*</span></label>
+											<input type="text" class="form-control">
+										</div>
+									</div>
+									<div class="mb-3 summer-description-box transfer">
+										<label class="form-label">Description</label>
+										<div id="summernote3">
+										</div>
+										<p>Maximum 60 Characters</p>
+									</div>	
+								</div>
+							</div>
+							<div class="modal-footer">
+								<button type="button" class="btn me-2 btn-secondary" data-bs-dismiss="modal">Cancel</button>
+								<button type="submit" class="btn btn-primary">Submit</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<!-- /Import Purchase -->
+ 		<!-- delete modal -->
+		 <div class="modal fade" id="delete-modal">
+			<div class="modal-dialog modal-dialog-centered">
+				<div class="modal-content">
+					<div class="page-wrapper-new p-0">
+						<div class="content p-5 px-3 text-center">
+								<span class="rounded-circle d-inline-flex p-2 bg-danger-transparent mb-2"><i class="ti ti-trash fs-24 text-danger"></i></span>
+								<h4 class="fs-20 fw-bold mb-2 mt-1">Delete Purchase</h4>
+								<p class="mb-0 fs-16">Are you sure you want to delete purchase?</p>
+								<div class="modal-footer-btn mt-3 d-flex justify-content-center">
+									<button type="button" class="btn me-2 btn-secondary fs-13 fw-medium p-2 px-3 shadow-none" data-bs-dismiss="modal">Cancel</button>
+									<button type="submit" class="btn btn-submit fs-13 fw-medium p-2 px-3">Yes Delete</button>
+								</div>						
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+
+	<!-- jQuery -->
+	<script src="assets/js/jquery-3.7.1.min.js" type="5272104702e55c1e26179fa2-text/javascript"></script>
+
+	<!-- Feather Icon JS -->
+	<script src="assets/js/feather.min.js" type="5272104702e55c1e26179fa2-text/javascript"></script>
+
+	<!-- Slimscroll JS -->
+	<script src="assets/js/jquery.slimscroll.min.js" type="5272104702e55c1e26179fa2-text/javascript"></script>
+
+	<!-- Datatable JS -->
+	<script src="assets/js/jquery.dataTables.min.js" type="5272104702e55c1e26179fa2-text/javascript"></script>
+	<script src="assets/js/dataTables.bootstrap5.min.js" type="5272104702e55c1e26179fa2-text/javascript"></script>
+
+	<!-- Bootstrap Core JS -->
+	<script src="assets/js/bootstrap.bundle.min.js" type="5272104702e55c1e26179fa2-text/javascript"></script>
+
+	<!-- Datetimepicker JS -->
+	<script src="assets/js/moment.min.js" type="5272104702e55c1e26179fa2-text/javascript"></script>
+	<script src="assets/js/bootstrap-datetimepicker.min.js" type="5272104702e55c1e26179fa2-text/javascript"></script>
+
+	<!-- Summernote JS -->
+	<script src="assets/plugins/summernote/summernote-bs4.min.js" type="5272104702e55c1e26179fa2-text/javascript"></script>
+
+	<!-- Select2 JS -->
+	<script src="assets/plugins/select2/js/select2.min.js" type="5272104702e55c1e26179fa2-text/javascript"></script>
+
+	<!-- Color Picker JS -->
+	<script src="assets/plugins/%40simonwep/pickr/pickr.es5.min.js" type="5272104702e55c1e26179fa2-text/javascript"></script>
+
+	<!-- Custom JS -->
+	<script src="assets/js/theme-colorpicker.js" type="5272104702e55c1e26179fa2-text/javascript"></script>
+	<script src="assets/js/script.js" type="5272104702e55c1e26179fa2-text/javascript"></script>
+
+	
+<script src="../../cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="5272104702e55c1e26179fa2-|49" defer></script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"951ebb282aef412e","version":"2025.6.2","serverTiming":{"name":{"cfExtPri":true,"cfEdge":true,"cfOrigin":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}},"token":"3ca157e612a14eccbb30cf6db6691c29","b":1}' crossorigin="anonymous"></script>
+</body>
+
+
+<!-- Mirrored from dreamspos.dreamstechnologies.com/html/template/purchase-list.html by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 19 Jun 2025 00:00:46 GMT -->
+</html>
