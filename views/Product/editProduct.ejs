@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+	<!-- Meta Tags -->
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="Dreams POS is a powerful Bootstrap based Inventory Management Admin Template designed for businesses, offering seamless invoicing, project tracking, and estimates.">
+	<meta name="keywords" content="inventory management, admin dashboard, bootstrap template, invoicing, estimates, business management, responsive admin, POS system">
+	<meta name="author" content="Dreams Technologies">
+	<meta name="robots" content="index, follow">
+	<title>Dreams POS - Inventory Management & Admin Dashboard Template</title>
+
+	<!-- Favicon -->
+	<link rel="shortcut icon" type="image/x-icon" href="../assets/img/favicon.png">
+
+	<!-- Apple Touch Icon -->
+	<link rel="apple-touch-icon" sizes="180x180" href="../assets/img/apple-touch-icon.png">
+
+	<!-- Bootstrap CSS -->
+	<link rel="stylesheet" href="../assets/css/bootstrap.min.css">
+
+	<!-- Datetimepicker CSS -->
+	<link rel="stylesheet" href="../assets/css/bootstrap-datetimepicker.min.css">
+
+	<!-- animation CSS -->
+	<link rel="stylesheet" href="../assets/css/animate.css">
+
+	<!-- Feathericon CSS -->
+	<link rel="stylesheet" href="../assets/css/feather.css">
+
+	<!-- Summernote CSS -->
+	<link rel="stylesheet" href="../assets/plugins/summernote/summernote-bs4.min.css">
+
+	<!-- Select2 CSS -->
+	<link rel="stylesheet" href="../assets/plugins/select2/css/select2.min.css">
+
+	<!-- Bootstrap Tagsinput CSS -->
+	<link rel="stylesheet" href="../assets/plugins/bootstrap-tagsinput/bootstrap-tagsinput.css">
+
+	<!-- Datatable CSS -->
+	<link rel="stylesheet" href="../assets/css/dataTables.bootstrap5.min.css">
+
+	<!-- Fontawesome CSS -->
+	<link rel="stylesheet" href="../assets/plugins/fontawesome/css/fontawesome.min.css">
+	<link rel="stylesheet" href="../assets/plugins/fontawesome/css/all.min.css">
+
+	<!-- Tabler Icon CSS -->
+	<link rel="stylesheet" href="../assets/plugins/tabler-icons/tabler-icons.min.css">
+
+	<!-- Color Picker Css -->
+	<link rel="stylesheet" href="../assets/plugins/%40simonwep/pickr/themes/nano.min.css">
+
+	<!-- Main CSS -->
+	<link rel="stylesheet" href="../assets/css/style.css">
+
+</head>
+
+<body>
+
+	<div id="global-loader">
+		<div class="whirly-loader"> </div>
+	</div>
+
+	<!-- Main Wrapper -->
+	<div class="main-wrapper">
+		<%- include('../partials/header') %>
+
+		<div class="page-wrapper">
+			<div class="content">
+				<div class="page-header">
+					<div class="add-item d-flex">
+						<div class="page-title">
+							<h4 class="fw-bold">Create Product</h4>
+							<h6>Create new product</h6>
+						</div>
+					</div>
+					<ul class="table-top-head">
+						<li>
+							<a href="/addProduct" data-bs-toggle="tooltip" data-bs-placement="top" title="Refresh"><i class="ti ti-refresh"></i></a>
+						</li>
+						<li>
+							<a data-bs-toggle="tooltip" data-bs-placement="top" title="Collapse" id="collapse-header"><i class="ti ti-chevron-up"></i></a>
+						</li>
+					</ul>
+					<div class="page-btn mt-0">
+						<a href="product-list.html" class="btn btn-secondary"><i data-feather="arrow-left" class="me-2"></i>Back to Product</a>
+					</div>
+				</div>
+				<form action="/addProduct" class="add-product-form" enctype="multipart/form-data" method="post">
+					<div class="add-product">
+						<div class="accordions-items-seperate" id="accordionSpacingExample">
+							<div class="accordion-item border mb-4">
+								<h2 class="accordion-header" id="headingSpacingOne">
+									<div class="accordion-button collapsed bg-white" data-bs-toggle="collapse" data-bs-target="#SpacingOne" aria-expanded="true" aria-controls="SpacingOne">
+										<div class="d-flex align-items-center justify-content-between flex-fill">
+										<h5 class="d-flex align-items-center"><i data-feather="info" class="text-primary me-2"></i><span>Product Information</span></h5>
+										</div>
+									</div>
+								</h2>
+								<div id="SpacingOne" class="accordion-collapse collapse show" aria-labelledby="headingSpacingOne">
+									<div class="accordion-body border-top">
+                                        <div class="row">
+                                            <div class="col-sm-6 col-12">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Product Name<span class="text-danger ms-1">*</span></label>
+                                                    <input name="product" list="productOptions" placeholder="Enter product name" autocomplete="off" type="text" class="form-control">
+                                                    <datalist id="productOptions"></datalist>
+                                                </div>
+                                            </div>
+                                            <div class="col-sm-6 col-12">
+                                                <div class="mb-3">
+                                                    <div class="add-newplus">
+                                                        <label class="form-label">Category<span class="text-danger ms-1">*</span></label>
+                                                        <a href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#add-product-category"><i data-feather="plus-circle" class="plus-down-add"></i><span>Add
+                                                                New</span></a>
+                                                    </div>
+                                                    <select class="select" name="category">
+                                                          <option disabled selected>Select Category</option>
+                                                       
+                                                            <option value="<%= product.category._id %>"><%= product.category.category_name %></option>
+                                                    
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+										<div class="row">
+											<div class="col-sm-6 col-12">
+												<div class="mb-3">
+													<label class="form-label">Branch<span class="text-danger ms-1">*</span></label>
+													<select class="select" name="branch">
+														<option value="<%= product.branch._id %>" selected><%= product.branch.branch_name %></option>
+													</select>
+												</div>
+											</div>
+										</div>	
+										<!-- Editor -->
+										<div class="col-lg-12">
+											<div class="summer-description-box" style="display: flex;
+											flex-direction: column;">
+												<label class="form-label">Description</label>
+												      <textarea
+														name="product_detail"
+														rows="7"
+														cols="60"
+														class="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+														placeholder="Maximum 300 characters...">
+														</textarea>
+												<p class="fs-14 mt-1">Maximum 60 Words</p>
+											</div>
+										</div>
+										<!-- /Editor -->
+									</div>
+								</div>
+							</div>
+							<div class="accordion-item border mb-4"> 
+								<h2 class="accordion-header" id="headingSpacingTwo">
+									<div class="accordion-button collapsed bg-white" data-bs-toggle="collapse" data-bs-target="#SpacingTwo" aria-expanded="true" aria-controls="SpacingTwo">
+										<div class="d-flex align-items-center justify-content-between flex-fill">
+										<h5 class="d-flex align-items-center"><i data-feather="life-buoy" class="text-primary me-2"></i><span>Product Variants</span></h5>
+										</div>
+									</div>
+								</h2>
+								<div id="SpacingTwo" class="accordion-collapse collapse show" aria-labelledby="headingSpacingTwo">
+									<div class="accordion-body border-top">
+										<div class="tab-content" id="pills-tabContent">
+											<div class="tab-pane fade show active" id="pills-home" role="tabpanel"
+												aria-labelledby="pills-home-tab">
+												<div class="single-product">
+                                                <div id="variantContainer">
+                                                    <div class="row variant-row">
+                                                        <div class="col-lg-4 col-sm-6 col-12">
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Base Quantity<span class="text-danger ms-1">*</span></label>
+                                                                <input type="number" readonly name="quantity[]" class="form-control">
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-lg-2 col-sm-6 col-12">
+                                                            <div class="mb-3" style="display: flex; flex-direction: column;">
+                                                                <label class="form-label">Unit<span class="text-danger ms-1">*</span></label>
+                                                                <select style="height: 40px; border-radius: 5px; border-color: #f1f3f5;" name="unitCode[]">
+                                                                <option disabled selected>Select Unit</option>
+                                                                
+                                                                
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-lg-2 col-sm-6 col-6">
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Low Stock Alert<span class="text-danger ms-1">*</span></label>
+                                                                <input type="text" name="lowStockAlert[]" class="form-control">
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-lg-2 col-sm-6 col-6">
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Supplier Price<span class="text-danger ms-1">*</span></label>
+                                                                <input type="text" readonly name="supplierPrice" class="form-control">
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-lg-2 col-sm-6 col-6">
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Sell Price<span class="text-danger ms-1">*</span></label>
+                                                                <input type="text" name="sellPrice[]" class="form-control">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <!-- ADD VARIANT BUTTON  -->
+                                                	
+                                                  
+
+                                                </div>
+                                                    <div class="row">
+                                                        <div class="col-lg-12">
+                                                            <div class="mb-3">
+                                                                <button type="button" id="addVariantBtn" class="btn btn-primary">
+                                                                    <i data-feather="plus-circle" class="me-2"></i>Add Variant
+                                                                </button>
+                                                            </div>          
+                                                    </div>
+                                                    </div>
+													<script>
+													document.getElementById('addVariantBtn').addEventListener('click', function () {
+														const container = document.getElementById('variantContainer');
+														const firstRow = container.querySelector('.variant-row');
+
+														if (firstRow) {
+															const clone = firstRow.cloneNode(true);
+
+															// Clear input values
+															clone.querySelectorAll('input').forEach(input => {
+																input.value = '';
+
+																// Remove readonly ONLY from quantity field
+																if (input.name === 'quantity[]') {
+																	input.removeAttribute('readonly');
+																}
+
+																// Disable supplierPrice field in the clone so it won't be submitted
+																if (input.name === 'supplierPrice') {
+																	input.disabled = true;
+																}
+															});
+
+															// Reset all select elements
+															clone.querySelectorAll('select').forEach(select => {
+																select.selectedIndex = 0;
+															});
+
+															container.appendChild(clone);
+														}
+													});
+													</script>
+
+
+
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div class="accordion-item border mb-4">
+								<h2 class="accordion-header" id="headingSpacingThree">
+									<div class="accordion-button collapsed bg-white" data-bs-toggle="collapse" data-bs-target="#SpacingThree" aria-expanded="true" aria-controls="SpacingThree">
+										<div class="d-flex align-items-center justify-content-between flex-fill">
+										<h5 class="d-flex align-items-center"><i data-feather="image" class="text-primary me-2"></i><span>Images</span></h5>
+										</div>
+									</div>
+								</h2>
+								<div id="SpacingThree" class="accordion-collapse collapse show" aria-labelledby="headingSpacingThree">
+                                    <div class="accordion-body border-top">
+                                        <div class="text-editor add-list add">
+                                        <div class="col-lg-12">
+                                            <div class="add-choosen">
+                                            <div class="mb-3">
+                                                <div class="image-upload image-upload-two">
+                                                <input type="file" name="product_image" id="imageInput" multiple accept="image/*">
+                                                <div class="image-uploads">
+                                                    <i data-feather="plus-circle" class="plus-down-add me-0"></i>
+                                                    <h4>Add Images</h4>
+                                                </div>
+                                                </div>
+                                            </div>
+                                            <div id="previewContainer" class="d-flex gap-2 flex-wrap"></div>
+                                            </div>
+                                        </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <script>
+                                    const imageInput = document.getElementById('imageInput');
+                                    const previewContainer = document.getElementById('previewContainer');
+
+                                    imageInput.addEventListener('change', function () {
+                                        previewContainer.innerHTML = ''; // Clear previous previews
+
+                                        const files = Array.from(imageInput.files);
+
+                                        files.forEach(file => {
+                                        if (!file.type.startsWith('image/')) return;
+
+                                        const reader = new FileReader();
+                                        reader.onload = function (e) {
+                                            const div = document.createElement('div');
+                                            div.classList.add('phone-img');
+                                            div.innerHTML = `
+                                            <img src="${e.target.result}" alt="preview" style="width: 100px; height: 100px; object-fit: cover;">
+                                            <a href="javascript:void(0);" class="remove-product"><i data-feather="x" class="x-square-add"></i></a>
+                                            `;
+                                            // Remove image on click
+                                            div.querySelector('.remove-product').addEventListener('click', () => div.remove());
+                                            previewContainer.appendChild(div);
+                                        };
+                                        reader.readAsDataURL(file);
+                                        });
+                                    });
+                                </script>
+
+							</div>
+							<div class="accordion-item border mb-4">
+								<h2 class="accordion-header" id="headingSpacingFour">
+									<div class="accordion-button collapsed bg-white" data-bs-toggle="collapse" data-bs-target="#SpacingFour" aria-expanded="true" aria-controls="SpacingFour">
+										<div class="d-flex align-items-center justify-content-between flex-fill">
+										<h5 class="d-flex align-items-center"><i data-feather="list" class="text-primary me-2"></i><span>Traceability Fields</span></h5>
+										</div>
+									</div>
+								</h2>
+								<div id="SpacingFour" class="accordion-collapse collapse show" aria-labelledby="headingSpacingFour">
+									<div class="accordion-body border-top">
+										<div>
+											<div class="row">
+												<div class="col-sm-6 col-12">
+													<div class="mb-3">
+														<label class="form-label">Manufactured Date<span class="text-danger ms-1">*</span></label>
+				
+														<div class="input-groupicon calender-input">
+															<input type="date" name="mfgDate" class="form-control" placeholder="dd/mm/yyyy">
+														</div>
+													</div>
+												</div>
+												<div class="col-sm-6 col-12">
+													<div class="mb-3">
+														<label class="form-label">Expiry On<span class="text-danger ms-1">*</span></label>
+				
+														<div class="input-groupicon calender-input">
+															<input type="date" name="expDate" class="form-control" placeholder="dd/mm/yyyy">
+														</div>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="col-lg-12">
+						<div class="d-flex align-items-center justify-content-end mb-4">
+							<button type="button" class="btn btn-secondary me-2">Cancel</button>
+							<button type="submit" class="btn btn-primary">Add Product</button>
+						</div>
+					</div>
+				</form>
+                
+			</div>
+			<div class="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
+				<p class="mb-0 text-gray-9">2025 &copy; AJELIELI. All Right Reserved</p>
+				<p>Developed by <a href="javascript:void(0);" class="text-primary">Tech Mayor Groups</a></p>
+			</div>
+		</div>
+	</div>
+	<!-- /Main Wrapper -->
+
+	<!-- Add Category -->
+	<div class="modal fade" id="add-product-category">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content">
+				<div class="modal-header">
+					<div class="page-title">
+						<h4>Add Category</h4>
+					</div>
+					<button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+				</div>
+				<form action="/addCategories-product" method="post">
+					<div class="modal-body">
+						<div class="mb-3">
+							<label class="form-label">Category Name<span class="text-danger ms-1">*</span></label>
+							<input type="text" autocomplete="off" name="category_name" class="form-control">
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn me-2 btn-secondary" data-bs-dismiss="modal">Cancel</button>
+						<button type="submit" class="btn btn-primary">Add Category</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+	<!-- /Add Category -->
+	
+	
+	<!-- jQuery -->
+	<script src="../assets/js/jquery-3.7.1.min.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+
+	<!-- Feather Icon JS -->
+	<script src="../assets/js/feather.min.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+
+	<!-- Slimscroll JS -->
+	<script src="../assets/js/jquery.slimscroll.min.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+
+	<!-- Datatable JS -->
+	<script src="../assets/js/jquery.dataTables.min.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+	<script src="../assets/js/dataTables.bootstrap5.min.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+
+	<!-- Bootstrap Core JS -->
+	<script src="../assets/js/bootstrap.bundle.min.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+
+	<!-- Select2 JS -->
+	<script src="../assets/plugins/select2/js/select2.min.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+
+	<!-- Summernote JS -->
+	<script src="../assets/plugins/summernote/summernote-bs4.min.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+
+	<!-- Datetimepicker JS -->
+	<script src="../assets/js/moment.min.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+	<script src="../assets/js/bootstrap-datetimepicker.min.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+
+	<!-- Bootstrap Tagsinput JS -->
+	<script src="../assets/plugins/bootstrap-tagsinput/bootstrap-tagsinput.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+
+	<!-- Color Picker JS -->
+	<script src="../assets/plugins/%40simonwep/pickr/pickr.es5.min.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+
+	<!-- Custom JS -->
+	<script src="../assets/js/theme-colorpicker.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+	<script src="../assets/js/script.js" type="31478e0b22863185c3fc9398-text/javascript"></script>
+
+
+<script src="../../cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="31478e0b22863185c3fc9398-|49" defer></script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"951ebab1bd7f412e","version":"2025.6.2","serverTiming":{"name":{"cfExtPri":true,"cfEdge":true,"cfOrigin":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}},"token":"3ca157e612a14eccbb30cf6db6691c29","b":1}' crossorigin="anonymous"></script>
+</body>
+
+
+</html>

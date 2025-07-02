@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="Dreams POS is a powerful Bootstrap based Inventory Management Admin Template designed for businesses, offering seamless invoicing, project tracking, and estimates.">
+	<meta name="keywords" content="inventory management, admin dashboard, bootstrap template, invoicing, estimates, business management, responsive admin, POS system">
+	<meta name="author" content="Dreams Technologies">
+	<meta name="robots" content="index, follow">
+	<title>Dreams POS - Inventory Management & Admin Dashboard Template</title>
+
+	<!-- Favicon -->
+	<link rel="shortcut icon" type="image/x-icon" href="assets/img/favicon.png">
+
+	<!-- Apple Touch Icon -->
+	<link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
+	
+	<!-- Bootstrap CSS -->
+	<link rel="stylesheet" href="assets/css/bootstrap.min.css">
+	
+	<!-- animation CSS -->
+	<link rel="stylesheet" href="assets/css/animate.css">
+
+	<!-- Select2 CSS -->
+	<link rel="stylesheet" href="assets/plugins/select2/css/select2.min.css">
+
+	<!-- Datatable CSS -->
+	<link rel="stylesheet" href="assets/css/dataTables.bootstrap5.min.css">
+	
+	<!-- Fontawesome CSS -->
+	<link rel="stylesheet" href="assets/plugins/fontawesome/css/fontawesome.min.css">
+	<link rel="stylesheet" href="assets/plugins/fontawesome/css/all.min.css">
+
+	<!-- Tabler Icon CSS -->
+	<link rel="stylesheet" href="assets/plugins/tabler-icons/tabler-icons.min.css">
+
+	<!-- Color Picker Css -->
+<link rel="stylesheet" href="assets/plugins/%40simonwep/pickr/themes/nano.min.css">
+
+	<!-- Main CSS -->
+	<link rel="stylesheet" href="assets/css/style.css">
+	
+</head>
+<body>
+	
+	<div id="global-loader" >
+		<div class="whirly-loader"> </div>
+	</div>
+
+	<!-- Main Wrapper -->
+	<div class="main-wrapper">
+	<%- include('../partials/header') %>
+
+		<div class="page-wrapper">
+			<div class="content">
+				<div class="page-header">
+					<div class="page-title me-auto">
+						<h4 class="fw-bold">Low Stocks</h4>
+						<h6>Manage your low stocks</h6>
+					</div>
+					<ul class="table-top-head low-stock-top-head">
+						<li>
+							<a data-bs-toggle="tooltip" data-bs-placement="top" title="Pdf"><img src="assets/img/icons/pdf.svg" alt="img"></a>
+						</li>
+						<li>
+							<a data-bs-toggle="tooltip" data-bs-placement="top" title="Excel"><img src="assets/img/icons/excel.svg" alt="img"></a>
+						</li>
+						<li>
+							<a data-bs-toggle="tooltip" data-bs-placement="top" title="Refresh"><i class="ti ti-refresh"></i></a>
+						</li>
+						<li>
+							<a data-bs-toggle="tooltip" data-bs-placement="top" title="Collapse" id="collapse-header"><i class="ti ti-chevron-up"></i></a>
+						</li>
+						<li>
+							<a href="#" class="btn btn-secondary w-auto shadow-none" data-bs-toggle="modal" data-bs-target="#send-email"><i data-feather="mail" class="feather-mail"></i>Send Email</a>
+						</li>
+					</ul>
+				</div>
+				<div class="mb-4">
+					<div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+					<ul class="nav nav-pills low-stock-tab d-flex me-2 mb-0" id="pills-tab" role="tablist">
+						<li class="nav-item" role="presentation">
+							<button class="nav-link active" id="pills-home-tab" data-bs-toggle="pill" data-bs-target="#pills-home" type="button" role="tab" aria-controls="pills-home" aria-selected="true">Low Stocks</button>
+						</li>
+						<li class="nav-item" role="presentation">
+							<button class="nav-link" id="pills-profile-tab" data-bs-toggle="pill" data-bs-target="#pills-profile" type="button" role="tab" aria-controls="pills-profile" aria-selected="false">Out of Stocks</button>
+						</li>
+						
+					</ul>
+					<div class="notify d-flex bg-white p-1 px-2 border rounded">
+						<div class="status-toggle text-secondary d-flex justify-content-between align-items-center">
+							<input type="checkbox" id="user2" class="check" checked="">
+							<label for="user2" class="checktoggle me-2">checkbox</label>
+							Notify
+						</div>
+					</div>
+				</div>
+					<div class="tab-content" id="pills-tabContent">
+						<div class="tab-pane fade show active" id="pills-home" role="tabpanel" aria-labelledby="pills-home-tab">
+							<!-- /product list -->
+							<div class="card">
+								<div class="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
+									<div class="search-set">
+										<div class="search-input">
+											<span class="btn-searchset"><i class="ti ti-search fs-14 feather-search"></i></span>
+										</div>
+									</div>
+					
+									<div class="d-flex table-dropdown my-xl-auto right-content align-items-center flex-wrap row-gap-3">
+										<div class="dropdown me-2">
+											<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
+												Branch
+											</a>
+											<ul class="dropdown-menu  dropdown-menu-end p-3">
+												<li>
+													<a href="javascript:void(0);" class="dropdown-item rounded-1">Lenovo IdeaPad 3</a>
+												</li>
+												<li>
+													<a href="javascript:void(0);" class="dropdown-item rounded-1">Beats Pro </a>
+												</li>
+												<li>
+													<a href="javascript:void(0);" class="dropdown-item rounded-1">Nike Jordan</a>
+												</li>
+												<li>
+													<a href="javascript:void(0);" class="dropdown-item rounded-1">Apple Series 5 Watch</a>
+												</li>
+											</ul>
+										</div>
+									</div>
+								</div>
+								<div class="card-body p-0">
+									<div class="table-responsive">
+										<table class="table datatable">
+											<thead class="thead-light">
+												<tr>
+													<th>Product Name</th>
+													<th>Category</th>
+													<th>Qty</th>
+													<th>Qty Alert</th>
+													<th class="no-sort"></th>
+												</tr>
+											</thead>
+											<tbody>
+											<% lowStockProducts.forEach(product => { 
+												product.variants.forEach(variant => {
+													if (variant.quantity <= variant.lowStockAlert) { 
+											%>
+											<tr>
+												<td>
+												<div class="d-flex align-items-center">
+													<a href="javascript:void(0);" class="avatar avatar-md me-2">
+													<img src="/media/uploads/<%= product.product_image %>" alt="<%= product.product %>">
+													</a>
+													<a href="javascript:void(0);"><%= product.product %> (<%= variant.unitCode %>)</a>
+												</div>												
+												</td>
+												<td><%= product.category ? product.category.category_name : '-' %></td>
+												<td><%= variant.quantity %></td>
+												<td><%= variant.lowStockAlert %></td>
+												<td class="action-table-data">
+												<div class="edit-delete-action">
+													<a href="/purchase-stock" class="btn btn-primary btn-md d-inline-flex align-items-center">
+														<i class="ti ti-circle-plus me-1"></i>Add New
+													</a>
+												</div>
+												</td>
+											</tr>
+											<%  } }); }); %>
+											</tbody>
+
+										</table>
+									</div>
+								</div>
+							</div>
+							<!-- /product list -->
+						</div>
+						<div class="tab-pane fade" id="pills-profile" role="tabpanel" aria-labelledby="pills-profile-tab">
+							<!-- /product list -->
+							<div class="card">
+								<div class="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
+									<div class="search-set">
+										<div class="search-input">
+											<span class="btn-searchset"><i class="ti ti-search fs-14 feather-search"></i></span>
+										</div>
+									</div>
+								</div>
+								<div class="card-body p-0">
+									<div class="table-responsive">
+										<table class="table datatable">
+											<thead class="thead-light">
+												<tr>
+													
+													<th>Product Name</th>
+													<th>Category</th>
+													<th>Unit Code</th>
+													<th>Qty</th>
+													<th class="no-sort">Action</th>
+												</tr>
+											</thead>
+											<tbody>
+											<% outOfStockProducts.forEach(product => { 
+												product.variants.forEach(variant => {
+													if (variant.quantity <= 0) { 
+											%>
+											<tr>
+												<td>
+												<div class="d-flex align-items-center">
+													<a href="javascript:void(0);" class="avatar avatar-md me-2">
+													<img src="/media/uploads/<%= product.product_image %>" alt="<%= product.product %>">
+													</a>
+													<a href="javascript:void(0);"><%= product.product %></a>
+												</div>												
+												</td>
+												<td><%= product.category ? product.category.category_name : '-' %></td>
+												<td><%= variant.unitCode %></td>
+												<td><%= variant.quantity %></td>
+												<td class="action-table-data">
+												<div class="edit-delete-action">
+													<a href="/purchase-stock" class="btn btn-primary btn-md d-inline-flex align-items-center">
+														<i class="ti ti-circle-plus me-1"></i>Add New
+													</a>
+												</div>
+												</td>
+											</tr>
+											<%  } }); }); %>
+											</tbody>
+
+										</table>
+									</div>
+								</div>
+							</div>
+							<!-- /product list -->
+						</div>
+						
+					</div>
+				</div>
+			</div>
+			<div class="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
+				<p class="mb-0 text-gray-9">2014 - 2025 &copy; AJELIELE. All Right Reserved</p>
+				<p>Developed by <a href="javascript:void(0);" class="text-primary">Tech Mayor Groups</a></p>
+			</div>
+		</div>
+	</div>
+	<!-- /Main Wrapper -->
+
+	<!-- Send Mail -->
+	<div class="modal fade" id="send-email">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content">
+				<div class="success-email-send modal-body text-center">
+					<span class="rounded-circle d-inline-flex p-2 bg-success-transparent mb-2"><i class="ti ti-checks fs-24 text-success"></i></span>
+					<h4 class="fs-20 fw-semibold">Success</h4>
+					<p>Email Sent Successfully</p>
+					<a href="#" class="btn btn-primary p-1 px-2 fs-13 fw-normal" data-bs-dismiss="modal">Close</a>
+				</div>
+			</div>
+		</div>
+	</div>
+	<!-- /Send Mail -->
+
+	<!-- Edit Low Stock -->
+	<div class="modal fade" id="edit-stock">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content">
+				<div class="modal-header">
+					<div class="page-title">
+						<h4>Edit Low Stocks</h4>
+					</div>
+					<button type="button" class="close bg-danger text-white fs-16" data-bs-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true" class="fs-16">&times;</span>
+					</button>
+				</div>
+				<form action="https://dreamspos.dreamstechnologies.com/html/template/low-stocks.html">
+					<div class="modal-body pb-0">
+						<div class="row">
+							<div class="col-sm-6 mb-3">
+								<label class="form-label">Warehouse<span class="text-danger ms-1">*</span></label>
+								<select class="select">
+									<option>Select</option>
+									<option selected>Lavish Warehouse</option>
+									<option>Quaint Warehouse</option>
+									<option>Traditional Warehouse</option>
+								</select>
+							</div>
+							<div class="col-sm-6 mb-3">
+								<label class="form-label">Store<span class="text-danger ms-1">*</span></label>
+								<select class="select">
+									<option>Select</option>
+									<option selected>Electro Mart</option>
+									<option>Quantum Gadgets</option>
+									<option>Prime Bazaar</option>
+								</select>
+							</div>
+							<div class="col-sm-6 mb-3">
+								<label class="form-label">SKU<span class="text-danger ms-1">*</span></label>
+								<input type="text" class="form-control" value="PT001">
+							</div>
+							<div class="col-sm-6 mb-3">
+								<label class="form-label">Category<span class="text-danger ms-1">*</span></label>
+								<select class="select">
+									<option>Select</option>
+									<option selected>Laptop</option>
+									<option>Electronics</option>
+									<option>Shoe</option>
+								</select>
+							</div>
+							<div class="col-12 mb-3">
+								<label class="form-label">Product Name<span class="text-danger ms-1">*</span></label>
+								<input type="text" class="form-control" value="Lenevo 3rd Gen">
+							</div>
+							<div class="col-sm-6 mb-3">
+								<label class="form-label">Qty<span class="text-danger ms-1">*</span></label>
+								<input type="text" class="form-control" value="15">
+							</div>
+							<div class="col-sm-6 mb-3">
+								<label class="form-label">Qty Alert<span class="text-danger ms-1">*</span></label>
+								<input type="text" class="form-control" value="10">
+							</div>
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn me-2 btn-secondary" data-bs-dismiss="modal">Cancel</button>
+						<button type="submit" class="btn btn-primary">Save Changes</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+	<!-- / Edit Low Stock -->
+
+	<!-- delete modal -->
+	<div class="modal fade" id="delete-modal">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content">
+				<div class="page-wrapper-new p-0">
+					<div class="content p-5 px-3 text-center">
+							<span class="rounded-circle d-inline-flex p-2 bg-danger-transparent mb-2"><i class="ti ti-trash fs-24 text-danger"></i></span>
+							<h4 class="fs-20 fw-bold mb-2 mt-1">Delete Product</h4>
+							<p class="mb-0 fs-16">Are you sure you want to delete product from low stock?</p>
+							<div class="modal-footer-btn mt-3 d-flex justify-content-center">
+								<button type="button" class="btn me-2 btn-secondary fs-13 fw-medium p-2 px-3 shadow-none" data-bs-dismiss="modal">Cancel</button>
+								<button type="submit" class="btn btn-primary fs-13 fw-medium p-2 px-3">Yes Delete</button>
+							</div>						
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+		
+	<!-- jQuery -->
+	<script src="assets/js/jquery-3.7.1.min.js" type="461fd78ce301d4ec1f09d877-text/javascript"></script>
+
+	<!-- Feather Icon JS -->
+	<script src="assets/js/feather.min.js" type="461fd78ce301d4ec1f09d877-text/javascript"></script>
+
+	<!-- Slimscroll JS -->
+	<script src="assets/js/jquery.slimscroll.min.js" type="461fd78ce301d4ec1f09d877-text/javascript"></script>
+
+	<!-- Datatable JS -->
+	<script src="assets/js/jquery.dataTables.min.js" type="461fd78ce301d4ec1f09d877-text/javascript"></script>
+	<script src="assets/js/dataTables.bootstrap5.min.js" type="461fd78ce301d4ec1f09d877-text/javascript"></script>
+	
+	<!-- Bootstrap Core JS -->
+	<script src="assets/js/bootstrap.bundle.min.js" type="461fd78ce301d4ec1f09d877-text/javascript"></script>
+
+	<!-- Select2 JS -->
+	<script src="assets/plugins/select2/js/select2.min.js" type="461fd78ce301d4ec1f09d877-text/javascript"></script>
+
+	<!-- Color Picker JS -->
+	<script src="assets/plugins/%40simonwep/pickr/pickr.es5.min.js" type="461fd78ce301d4ec1f09d877-text/javascript"></script>
+
+	<!-- Custom JS -->
+	<script src="assets/js/theme-colorpicker.js" type="461fd78ce301d4ec1f09d877-text/javascript"></script>
+	<script src="assets/js/script.js" type="461fd78ce301d4ec1f09d877-text/javascript"></script>
+
+
+<script src="../../cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="461fd78ce301d4ec1f09d877-|49" defer></script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"951ebb0a0fbf412e","version":"2025.6.2","serverTiming":{"name":{"cfExtPri":true,"cfEdge":true,"cfOrigin":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}},"token":"3ca157e612a14eccbb30cf6db6691c29","b":1}' crossorigin="anonymous"></script>
+</body>
+</html>

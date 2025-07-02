@@ -50,7 +50,9 @@ const StockLedger =  require("../model/StockLedger");
 const ParkingStore = require("../model/ParkingStore");
 const ParkingStock = require("../model/ParkingStock");
 const Config = require('../model/NegSales');
+const Notification = require('../model/Notification');
 router.use(require("../routes/query"))
+
 
 
 
@@ -660,6 +662,53 @@ router.post("/addProduct", upload.single("product_image"), (req, res, next) => {
       next(err);
     });
 });
+
+
+router.get("/product-details/:id", async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  try {
+    const product = await Product.findById(req.params.id)
+      .populate("category")
+      .populate("branch")
+      .populate("variants.supplier");
+
+    if (!product) {
+      req.flash("error", "Product not found.");
+      return res.redirect("back");
+    }
+
+    res.render("Product/product-details", {
+      user: req.user,
+      product
+    });
+  } catch (err) {
+    console.error("Error fetching product:", err);
+    res.redirect("/error-404");
+  }
+});
+
+
+router.get('/edit-product/:id', async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect('/sign-in');
+
+  try {
+    const user = await User.findById(req.user._id).populate('branch');
+    const product = await Product.findById(req.params.id).populate('category branch variants.supplier');
+
+    if (!product) return res.redirect('/error-404');
+
+    if (user.role !== 'owner' && !product.branch._id.equals(user.branch._id)) {
+      return res.redirect('/unauthorized');
+    }
+
+    res.render('Product/editProduct', { user, product });
+  } catch (err) {
+    console.error(err);
+    res.redirect('/error-404');
+  }
+});
+
 // STOCK ROUTE ENDS HERE 
 
 // RECEIVE STOCK ROUTE 
@@ -1341,6 +1390,33 @@ router.get('/searchProduct', async (req, res) => {
   }
 });
 
+
+router.post("/updateStore", (req, res) => {
+  const updateData = {
+    storeName: req.body.storeName
+  };
+
+  ParkingStore.findByIdAndUpdate(req.body.store_id, { $set: updateData }, { new: true })
+    .then(updatedDocument => {
+      res.redirect("/manageParkingStore");
+    })
+    .catch(err => {
+      console.error("Error updating document:", err);
+    });
+});
+
+router.get("/deleteStore/:id", (req, res) => {
+  const storeId = req.params.id;
+
+  ParkingStore.findByIdAndDelete(storeId)
+    .then(() => {
+      res.redirect("/manageParkingStore");
+    })
+    .catch(err => {
+      res.redirect("/error-404");
+    });
+});
+
 // STORE ENDS HERE ----------------- TECH MAYOR GROUPS
 
 // SALES ROUTE STARTS HERE 
@@ -1407,6 +1483,364 @@ router.get("/createSales", (req, res, next) => {
     res.redirect("/");
   }
 });
+
+router.post("/settings/toggle-negative-sales", async (req, res) => {
+  if (!req.isAuthenticated() || req.user.role !== 'owner') {
+    return res.status(403).json({ success: false, message: "Forbidden" });
+  }
+
+  try {
+    let config = await Config.findOne({ key: "negativeSalesActive" });
+    if (!config) {
+      config = new Config({ key: "negativeSalesActive", value: true });
+    } else {
+      config.value = !config.value;
+    }
+
+    await config.save();
+
+    res.json({ success: true, active: config.value });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+});
+
+router.post('/addinvoice', (req,res)=>{
+  console.log("Received invoice data:", req.body);
+  
+})
 // SALES ROUTE ENDS HERE ................ TECH MYOR 
+
+
+// EXPIRED PRODUCTS ROUTE STARTS HERE
+router.get("/expiredProducts", async (req, res) => {
+  const currentDate = new Date();
+  const selectedBranchId = req.query.branchId;
+
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  try {
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/");
+
+    // OWNER ROUTE
+    if (user.role === "owner") {
+      const allBranches = await Branch.find();
+      const branchToFilter = selectedBranchId || user.branch._id;
+
+      const expiredProducts = await Product.find({
+        branch: branchToFilter,
+        expDate: { $lt: currentDate }
+      }).populate("branch category variants.supplier");
+
+      if (expiredProducts.length > 0) {
+        const branch = allBranches.find(b => b._id.equals(branchToFilter));
+        const existingNotification = await Notification.findOne({
+          type: "expiredStock",
+          pageLink: `/expiredProducts?branchId=${branch._id}`,
+          isDismissed: false
+        });
+
+        if (!existingNotification) {
+          await Notification.create({
+            title: "Expired Stock Alert",
+            description: `There are ${expiredProducts.length} expired product(s) at branch ${branch.branch_name}.`,
+            type: "expiredStock",
+            pageLink: `/expiredProducts?branchId=${branch._id}`
+          });
+        }
+      }
+
+      return res.render("ExpiredProducts/expiredProducts", {
+        user,
+        ownerBranch: { branch: user.branch },
+        branches: allBranches,
+        selectedBranchId: branchToFilter,
+        expiredProducts
+      });
+    }
+
+    // STAFF ROUTE
+    const expiredProducts = await Product.find({
+      branch: user.branch._id,
+      expDate: { $lt: currentDate }
+    }).populate("branch category variants.supplier");
+
+    if (expiredProducts.length > 0) {
+      const existingNotification = await Notification.findOne({
+        type: "expiredStock",
+        pageLink: `/expiredProducts?branchId=${user.branch._id}`,
+        isDismissed: false
+      });
+
+      if (!existingNotification) {
+        await Notification.create({
+          title: "Expired Stock Alert",
+          description: `You have ${expiredProducts.length} expired product(s) at branch ${user.branch.branch_name}.`,
+          type: "expiredStock",
+          pageLink: `/expiredProducts?branchId=${user.branch._id}`
+        });
+      }
+    }
+
+    return res.render("ExpiredProducts/expiredProducts", {
+      user,
+      ownerBranch: { branch: user.branch },
+      branches: [user.branch],
+      selectedBranchId: user.branch._id,
+      expiredProducts
+    });
+  } catch (err) {
+    console.error(err);
+    res.redirect("/error-404");
+  }
+});
+
+router.post("/edit-expired-product", async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  const { product_id, mfgDate, expDate } = req.body;
+
+  try {
+    await Product.findByIdAndUpdate(product_id, {
+      mfgDate: new Date(mfgDate),
+      expDate: new Date(expDate)
+    });
+    res.redirect("/expiredProducts");
+  } catch (err) {
+    console.error("Error updating expired product:", err);
+  }
+});
+
+// EXPIRED ROUTE ENDS HERE ----------------- TECH MAYOR GROUPS
+
+// LOW STOCK ROUTE STARTS HERE
+router.get("/lowStock", async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  const selectedBranchId = req.query.branchId;
+
+  try {
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/");
+
+    if (user.role === "owner") {
+      const allBranches = await Branch.find();
+      const branchToFilter = selectedBranchId || user.branch._id;
+
+      // LOW STOCK: products with any variant quantity <= lowStockAlert
+      let lowStockProducts = await Product.aggregate([
+        { $match: { branch: branchToFilter } },
+        {
+          $addFields: {
+            hasLowStock: {
+              $gt: [
+                {
+                  $size: {
+                    $filter: {
+                      input: "$variants",
+                      as: "v",
+                      cond: { $lte: ["$$v.quantity", "$$v.lowStockAlert"] }
+                    }
+                  }
+                },
+                0
+              ]
+            }
+          }
+        },
+        { $match: { hasLowStock: true } }
+      ]);
+
+      // OUT OF STOCK: products where all variants have quantity <= 0
+      let outOfStockProducts = await Product.aggregate([
+        { $match: { branch: branchToFilter } },
+        {
+          $addFields: {
+            totalVariants: { $size: "$variants" },
+            zeroVariantsCount: {
+              $size: {
+                $filter: {
+                  input: "$variants",
+                  as: "v",
+                  cond: { $lte: ["$$v.quantity", 0] }
+                }
+              }
+            }
+          }
+        },
+        { $match: { $expr: { $eq: ["$totalVariants", "$zeroVariantsCount"] } } }
+      ]);
+
+      // Populate
+      lowStockProducts = await Product.populate(lowStockProducts, [
+        { path: "branch" },
+        { path: "category" },
+        { path: "variants.supplier" }
+      ]);
+      outOfStockProducts = await Product.populate(outOfStockProducts, [
+        { path: "branch" },
+        { path: "category" },
+        { path: "variants.supplier" }
+      ]);
+
+      const branch = allBranches.find(b => b._id.equals(branchToFilter));
+
+      // Notification for low stock
+      if (lowStockProducts.length > 0) {
+        const existingLowStockNotification = await Notification.findOne({
+          type: "lowStock",
+          pageLink: `/lowStock?branchId=${branch._id}`,
+          isDismissed: false
+        });
+        if (!existingLowStockNotification) {
+          await Notification.create({
+            title: "Low Stock Alert",
+            description: `There are ${lowStockProducts.length} low stock product(s) at branch ${branch.branch_name}.`,
+            type: "lowStock",
+            pageLink: `/lowStock?branchId=${branch._id}`,
+            branch: branch._id
+          });
+        }
+      }
+
+      // Notification for out of stock
+      if (outOfStockProducts.length > 0) {
+        const existingOutOfStockNotification = await Notification.findOne({
+          type: "outOfStock",
+          pageLink: `/lowStock?branchId=${branch._id}`,
+          isDismissed: false
+        });
+        if (!existingOutOfStockNotification) {
+          await Notification.create({
+            title: "Out of Stock Alert",
+            description: `There are ${outOfStockProducts.length} completely out of stock product(s) at branch ${branch.branch_name}.`,
+            type: "outOfStock",
+            pageLink: `/lowStock?branchId=${branch._id}`,
+            branch: branch._id
+          });
+        }
+      }
+
+      return res.render("LowStock/low-stock", {
+        user,
+        ownerBranch: { branch: user.branch },
+        branches: allBranches,
+        selectedBranchId: branchToFilter,
+        lowStockProducts,
+        outOfStockProducts
+      });
+    }
+
+    // STAFF ROUTE
+    let lowStockProducts = await Product.aggregate([
+      { $match: { branch: user.branch._id } },
+      {
+        $addFields: {
+          hasLowStock: {
+            $gt: [
+              {
+                $size: {
+                  $filter: {
+                    input: "$variants",
+                    as: "v",
+                    cond: { $lte: ["$$v.quantity", "$$v.lowStockAlert"] }
+                  }
+                }
+              },
+              0
+            ]
+          }
+        }
+      },
+      { $match: { hasLowStock: true } }
+    ]);
+
+    let outOfStockProducts = await Product.aggregate([
+      { $match: { branch: user.branch._id } },
+      {
+        $addFields: {
+          totalVariants: { $size: "$variants" },
+          zeroVariantsCount: {
+            $size: {
+              $filter: {
+                input: "$variants",
+                as: "v",
+                cond: { $lte: ["$$v.quantity", 0] }
+              }
+            }
+          }
+        }
+      },
+      { $match: { $expr: { $eq: ["$totalVariants", "$zeroVariantsCount"] } } }
+    ]);
+
+    // Populate
+    lowStockProducts = await Product.populate(lowStockProducts, [
+      { path: "branch" },
+      { path: "category" },
+      { path: "variants.supplier" }
+    ]);
+    outOfStockProducts = await Product.populate(outOfStockProducts, [
+      { path: "branch" },
+      { path: "category" },
+      { path: "variants.supplier" }
+    ]);
+
+    // Notifications for staff (always add branch)
+    if (lowStockProducts.length > 0) {
+      const existingLowStockNotification = await Notification.findOne({
+        type: "lowStock",
+        pageLink: `/lowStock?branchId=${user.branch._id}`,
+        isDismissed: false
+      });
+      if (!existingLowStockNotification) {
+        await Notification.create({
+          title: "Low Stock Alert",
+          description: `You have ${lowStockProducts.length} low stock product(s) at branch ${user.branch.branch_name}.`,
+          type: "lowStock",
+          pageLink: `/lowStock?branchId=${user.branch._id}`,
+          branch: user.branch._id
+        });
+      }
+    }
+
+    if (outOfStockProducts.length > 0) {
+      const existingOutOfStockNotification = await Notification.findOne({
+        type: "outOfStock",
+        pageLink: `/lowStock?branchId=${user.branch._id}`,
+        isDismissed: false
+      });
+      if (!existingOutOfStockNotification) {
+        await Notification.create({
+          title: "Out of Stock Alert",
+          description: `You have ${outOfStockProducts.length} completely out of stock product(s) at branch ${user.branch.branch_name}.`,
+          type: "outOfStock",
+          pageLink: `/lowStock?branchId=${user.branch._id}`,
+          branch: user.branch._id
+        });
+      }
+    }
+
+    return res.render("LowStock/low-stock", {
+      user,
+      ownerBranch: { branch: user.branch },
+      branches: [user.branch],
+      selectedBranchId: user.branch._id,
+      lowStockProducts,
+      outOfStockProducts
+    });
+  } catch (err) {
+    console.error(err);
+    res.redirect("/error-404");
+  }
+});
+
+
+
+
+
+
 
 module.exports = router;

@@ -150,78 +150,82 @@
                     <div class="card-body p-0">
                         <div class="table-responsive">
                         <table class="table datatable">
-                        <thead class="thead-light">
-                            <tr>
-                            <th>Product Name</th>
-                            <th>Supplier Price</th>
+                            <thead class="thead-light">
+                                <tr>
+                                <th>Product Name</th>
+                                <th>Supplier Price</th>
 
-                            <th style="position: relative; user-select: none;">
-                                <div style="display: flex; align-items: center; gap: 4px; cursor: pointer;" id="unitHeader">
-                                <span>Unit</span>
-                                <span style="font-size: 0.7rem;">&#9662;</span>
+                                <th style="position: relative; user-select: none;">
+                                    <div style="display: flex; align-items: center; gap: 4px; cursor: pointer;" id="unitHeader">
+                                    <span>Unit</span>
+                                    <span style="font-size: 0.7rem;">&#9662;</span>
+                                    </div>
+
+                                    <select id="unitFilter" size="<%= units.length %>"
+                                    style="position: absolute; top: 100%; left: 0; margin-top: 4px; z-index: 9999;
+                                            display: none; background: white; border: 1px solid #ccc; padding: 4px 8px;
+                                            border-radius: 4px; max-height: 200px; overflow-y: auto; width: 100%;">
+                                    <% units.forEach(unit => { %>
+                                        <option value="<%= unit.unit_name %>"><%= unit.unit_name %></option>
+                                    <% }) %>
+                                    </select>
+                                </th>
+
+                                <th>Sell Price</th>
+                                <th>Qty</th>
+                                <th>Category</th>
+                                <th class="no-sort"></th>
+                                </tr>
+                            </thead>
+
+                            <tbody id="productTableBody">
+                            <% products.forEach((product) => { 
+                                const variantData = {};
+                                let defaultUnit = "";
+                                let defaultPrice = "-";
+                                let defaultQty = "-";
+
+                                if (product.variants.length > 0) {
+                                defaultUnit = product.variants[0].unitCode;
+                                defaultPrice = product.variants[0].sellPrice;
+                                defaultQty = product.variants[0].quantity;
+
+                                product.variants.forEach(variant => {
+                                    variantData[variant.unitCode] = {
+                                    price: variant.sellPrice,
+                                    qty: variant.quantity
+                                    };
+                                });
+                                }
+                            %>
+                            <tr data-variants='<%- JSON.stringify(variantData) %>'>
+                                <td>
+                                <div class="d-flex align-items-center">
+                                    <a href="javascript:void(0);" class="avatar avatar-md me-2">
+                                    <img src="/media/uploads/<%= product.product_image %>" alt="product">
+                                    </a>
+                                    <a href="javascript:void(0);"><%= product.product %></a>
                                 </div>
-
-                                <select id="unitFilter" size="<%= units.length %>"
-                                style="position: absolute; top: 100%; left: 0; margin-top: 4px; z-index: 9999;
-                                        display: none; background: white; border: 1px solid #ccc; padding: 4px 8px;
-                                        border-radius: 4px; max-height: 200px; overflow-y: auto; width: 100%;">
-                                <% units.forEach(unit => { %>
-                                    <option value="<%= unit.unit_name %>"><%= unit.unit_name %></option>
-                                <% }) %>
-                                </select>
-                            </th>
-
-                            <th>Sell Price</th>
-                            <th>Qty</th>
-                            <th>Category</th>
-                            <th class="no-sort"></th>
+                                </td>
+                                <td>₦<%= product.supplierPrice %></td>
+                                <td class="unit-cell"><%= defaultUnit %></td>
+                                <td class="sell-price-cell">₦<%= defaultPrice %></td>
+                                <td class="qty-cell"><%= defaultQty %></td>
+                                <td><%= product.category.category_name %></td>
+                                <td class="action-table-data">
+                                <div class="edit-delete-action">
+                                    <a class="me-2 edit-icon p-2" href="/product-details/<%= product._id %>">
+                                    <i data-feather="eye"></i>
+                                    </a>
+                                    <a class="me-2 p-2" href="/edit-product/<%= product._id %>">
+                                    <i data-feather="edit"></i>
+                                    </a>
+                                    <a data-bs-toggle="modal" data-bs-target="#delete-modal" class="p-2" href="javascript:void(0);"><i data-feather="trash-2"></i></a>
+                                </div>
+                                </td>
                             </tr>
-                        </thead>
-
-                        <tbody id="productTableBody">
-                        <% products.forEach((product) => { 
-                            const variantData = {};
-                            let defaultUnit = "";
-                            let defaultPrice = "-";
-                            let defaultQty = "-";
-
-                            if (product.variants.length > 0) {
-                            defaultUnit = product.variants[0].unitCode;
-                            defaultPrice = product.variants[0].sellPrice;
-                            defaultQty = product.variants[0].quantity;
-
-                            product.variants.forEach(variant => {
-                                variantData[variant.unitCode] = {
-                                price: variant.sellPrice,
-                                qty: variant.quantity
-                                };
-                            });
-                            }
-                        %>
-                        <tr data-variants='<%- JSON.stringify(variantData) %>'>
-                            <td>
-                            <div class="d-flex align-items-center">
-                                <a href="javascript:void(0);" class="avatar avatar-md me-2">
-                                <img src="/media/uploads/<%= product.product_image %>" alt="product">
-                                </a>
-                                <a href="javascript:void(0);"><%= product.product %></a>
-                            </div>
-                            </td>
-                            <td>₦<%= product.supplierPrice %></td>
-                            <td class="unit-cell"><%= defaultUnit %></td>
-                            <td class="sell-price-cell">₦<%= defaultPrice %></td>
-                            <td class="qty-cell"><%= defaultQty %></td>
-                            <td><%= product.category.category_name %></td>
-                            <td class="action-table-data">
-                            <div class="edit-delete-action">
-                                <a class="me-2 edit-icon p-2" href="product-details.html"><i data-feather="eye"></i></a>
-                                <a class="me-2 p-2" href="edit-product.html"><i data-feather="edit"></i></a>
-                                <a data-bs-toggle="modal" data-bs-target="#delete-modal" class="p-2" href="javascript:void(0);"><i data-feather="trash-2"></i></a>
-                            </div>
-                            </td>
-                        </tr>
-                        <% }) %>
-                        </tbody>
+                            <% }) %>
+                            </tbody>
                         </table>
                         <script>
                         const header = document.getElementById("unitHeader");

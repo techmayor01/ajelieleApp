@@ -247,4 +247,35 @@ router.get('/searchParkingStock', async (req, res) => {
 
 
 
+
+
+router.get('/search-products', async (req, res) => {
+  const query = req.query.q;
+  if (!query) return res.json([]);
+
+  const branchId = req.user.branch; // Adjust based on where branch is stored
+
+  if (!branchId) {
+    return res.status(400).json({ error: 'Branch not specified' });
+  }
+
+  try {
+    const products = await Product.find({
+      branch: branchId,             // Filter by branch here
+      product: { $regex: query, $options: "i" }
+    }).limit(10);
+
+    const productsWithAvailableQty = products.map(product => {
+      const available_qty = product.variants.reduce((sum, variant) => sum + variant.quantity, 0);
+      return { ...product.toObject(), available_qty };
+    });
+
+    res.json(productsWithAvailableQty);
+  } catch (error) {
+    console.error('Error searching products:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
 module.exports = router;

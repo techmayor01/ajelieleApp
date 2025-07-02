@@ -8,7 +8,6 @@ module.exports = async function checkAndCreateNotifications(user) {
   const isOwner = user.role === "owner";
   const branchId = user.branch._id;
 
-  // Helper to avoid duplicates
   const createNotification = async (query) => {
     const exists = await Notification.findOne({
       title: query.title,
@@ -19,7 +18,6 @@ module.exports = async function checkAndCreateNotifications(user) {
     if (!exists) await Notification.create(query);
   };
 
-  // 🔴 1. Expired Stock
   const expiredProducts = await Product.find({
     branch: isOwner ? { $exists: true } : branchId,
     expDate: { $lt: new Date() },
