@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+	<!-- Meta Tags -->
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="Dreams POS is a powerful Bootstrap based Inventory Management Admin Template designed for businesses, offering seamless invoicing, project tracking, and estimates.">
+	<meta name="keywords" content="inventory management, admin dashboard, bootstrap template, invoicing, estimates, business management, responsive admin, POS system">
+	<meta name="author" content="Dreams Technologies">
+	<meta name="robots" content="index, follow">
+	<title>Dreams POS - Inventory Management & Admin Dashboard Template</title>
+
+	<!-- Favicon -->
+	<link rel="shortcut icon" type="image/x-icon" href="assets/img/favicon.png">
+
+	<!-- Apple Touch Icon -->
+	<link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
+	
+	<!-- Bootstrap CSS -->
+	<link rel="stylesheet" href="assets/css/bootstrap.min.css">
+	
+	<!-- animation CSS -->
+	<link rel="stylesheet" href="assets/css/animate.css">
+
+	<!-- Select2 CSS -->
+	<link rel="stylesheet" href="assets/plugins/select2/css/select2.min.css">
+
+	<!-- Summernote CSS -->
+	<link rel="stylesheet" href="assets/plugins/summernote/summernote-bs4.min.css">
+
+	<!-- Datetimepicker CSS -->
+	<link rel="stylesheet" href="assets/css/bootstrap-datetimepicker.min.css">
+
+	<!-- Datatable CSS -->
+	<link rel="stylesheet" href="assets/css/dataTables.bootstrap5.min.css">
+	
+	<!-- Fontawesome CSS -->
+	<link rel="stylesheet" href="assets/plugins/fontawesome/css/fontawesome.min.css">
+	<link rel="stylesheet" href="assets/plugins/fontawesome/css/all.min.css">
+
+	<!-- Tabler Icon CSS -->
+	<link rel="stylesheet" href="assets/plugins/tabler-icons/tabler-icons.min.css">
+
+	<!-- Color Picker Css -->
+	<link rel="stylesheet" href="assets/plugins/%40simonwep/pickr/themes/nano.min.css">
+
+	<!-- Main CSS -->
+	<link rel="stylesheet" href="assets/css/style.css">
+	
+</head>
+    <body>
+		
+		<div id="global-loader" >
+			<div class="whirly-loader"> </div>
+		</div>
+
+		<!-- Main Wrapper -->
+        <div class="main-wrapper">
+			<%- include('../partials/header') %>
+
+			<div class="page-wrapper">
+				<div class="content">
+					<div class="page-header">
+						<div class="add-item d-flex">
+							<div class="page-title">
+								<h4>Stock Transfer</h4>
+								<h6>Manage your stock transfer</h6>
+							</div>							
+						</div>
+						<ul class="table-top-head">
+							<li>
+								<a data-bs-toggle="tooltip" data-bs-placement="top" title="Pdf"><img src="assets/img/icons/pdf.svg" alt="img"></a>
+							</li>
+							<li>
+								<a data-bs-toggle="tooltip" data-bs-placement="top" title="Excel"><img src="assets/img/icons/excel.svg" alt="img"></a>
+							</li>
+							<li>
+								<a data-bs-toggle="tooltip" data-bs-placement="top" title="Refresh"><i class="ti ti-refresh"></i></a>
+							</li>
+							<li>
+								<a data-bs-toggle="tooltip" data-bs-placement="top" title="Collapse" id="collapse-header"><i class="ti ti-chevron-up"></i></a>
+							</li>
+						</ul>
+						<div class="page-btn">
+							<a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#add-stock-transfer"><i class="ti ti-circle-plus me-1"></i>Add New</a>
+						</div>
+						<div class="page-btn import">
+							<a href="#" class="btn btn-secondary color" data-bs-toggle="modal" data-bs-target="#view-notes"><i
+								data-feather="download" class="me-1"></i>Import Transfer</a>
+						</div>
+					</div>
+					<!-- /product list -->
+					<div class="card">
+						<div class="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
+							<div class="search-set">
+								<div class="search-input">
+									<span class="btn-searchset"><i class="ti ti-search fs-14 feather-search"></i></span>
+								</div>
+							</div>
+							<div class="d-flex table-dropdown my-xl-auto right-content align-items-center flex-wrap row-gap-3">
+								<div class="dropdown me-2">
+									<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
+										From Warehouse
+									</a>
+									<ul class="dropdown-menu  dropdown-menu-end p-3">
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Lavish Warehouse</a>
+										</li>
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Quaint Warehouse</a>
+										</li>
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Traditional Warehouse</a>
+										</li>
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Cool Warehouse</a>
+										</li>
+									</ul>
+								</div>
+								<div class="dropdown me-2">
+									<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
+										To Warehouse
+									</a>
+									<ul class="dropdown-menu  dropdown-menu-end p-3">
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">North Zone Warehouse</a>
+										</li>
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Nova Storage Hub</a>
+										</li>
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Cool Warehouse</a>
+										</li>
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Retail Supply Hub</a>
+										</li>
+									</ul>
+								</div>
+								<div class="dropdown">
+									<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
+										Sort By : Last 7 Days
+									</a>
+									<ul class="dropdown-menu  dropdown-menu-end p-3">
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Recently Added</a>
+										</li>
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Ascending</a>
+										</li>
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Desending</a>
+										</li>
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Last Month</a>
+										</li>
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Last 7 Days</a>
+										</li>
+									</ul>
+								</div>
+							</div>
+						</div>
+						<div class="card-body p-0">
+							<div class="table-responsive">
+								<table class="table datatable">
+									<thead class="thead-light">
+										<tr>
+											<th>From Warehouse</th>
+											<th>To Warehouse</th>
+											<th>No of Products</th>
+											<th>Quantity Transfered</th>
+											<th>Ref Number</th>
+											<th>Date</th>
+											<th class="no-sort"></th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>Lavish Warehouse </td>
+											<td>North Zone Warehouse </td>
+											<td>
+												20												
+											</td>
+											<td>
+												15
+											</td>
+											<td>#458924</td>
+											<td>24 Dec 2024</td>
+											<td class="d-flex">
+												<div class="edit-delete-action d-flex align-items-center justify-content-center">
+													<a class="me-2 p-2 d-flex align-items-center justify-content-between border rounded" href="#" data-bs-toggle="modal" data-bs-target="#edit-stock-transfer">
+														<i data-feather="edit" class="feather-edit"></i>
+													</a>
+													<a class="p-2 d-flex align-items-center justify-content-between border rounded" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#delete">
+														<i data-feather="trash-2" class="feather-trash-2"></i>
+													</a>
+												</div>
+												
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+					<!-- /product list -->
+				</div>
+				<div class="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
+					<p class="mb-0">2025 &copy; AJELIELE. All Right Reserved</p>
+					<p>Developed by <a href="javascript:void(0);" class="text-primary">Tech Mayor Groups</a></p>
+				</div>
+			</div>
+        </div>
+		<!-- /Main Wrapper -->
+
+		<!-- Add Stock -->
+
+
+		<div class="modal fade" id="add-stock-transfer">
+		<div class="modal-dialog purchase modal-dialog-centered">
+			<div class="modal-content">
+				<div class="modal-header">
+					<div class="page-title">
+						<h4>Add Transfer</h4>
+					</div>
+					<button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+				</div>
+				<form action="/stock-transfer" method="post">
+					<div class="modal-body">
+						<div class="row">
+							<div class="col-lg-4 col-md-6 col-sm-12">
+							<div class="mb-3">
+								<label class="form-label">Transfer From<span class="text-danger ms-1">*</span></label>
+								<select class="form-control" name="branch_from" id="branch_from" required>
+								<% branches.forEach(b => { 
+									if (b._id.toString() !== ownerBranch.branch._id.toString()) { %>
+									<option value="<%= b._id %>"><%= b.branch_name %></option>
+								<% } }) %>
+								</select>
+							</div>
+							</div>
+
+							<div class="col-lg-4 col-md-6 col-sm-12">
+							<div class="mb-3">
+								<label class="form-label">Transfer To<span class="text-danger ms-1">*</span></label>
+								<input type="text" readonly class="form-control" value="<%= ownerBranch.branch.branch_name %>">
+								<input type="hidden" name="branch_to" value="<%= ownerBranch.branch._id %>">
+							</div>
+							</div>
+
+							<div class="col-lg-4 col-md-6 col-sm-12">
+								<div class="mb-3">
+									<label class="form-label">Date<span class="text-danger ms-1">*</span></label>
+
+									<div class="input-groupicon calender-input">
+										<input name="payment_date" id="payment_date" type="date" class="form-control p-2" placeholder="dd/mm/yyyy">
+									</div>
+									   <script>
+											const today = new Date().toISOString().split('T')[0];
+											document.getElementById('payment_date').value = today;
+										</script>
+								</div>
+							</div>
+							<div class="col-lg-4 col-sm-12">
+								<div class="mb-3">
+									<label class="form-label">Transaction Number<span class="text-danger ms-1">*</span></label>
+									<input name="invoice_number" id="invoice_number" type="text" class="form-control">
+								</div>
+							</div>
+						</div>
+						<div class="row">
+							<div class="col-lg-12">
+								<div class="modal-body-table mt-3">
+									<div class="table-responsive">
+										<table class="table datatable rounded-1">
+											<thead>
+												<tr>
+													<th class="bg-secondary-transparent p-3">Product Name</th>
+													<th class="bg-secondary-transparent p-3">Unit</th>
+													<th class="bg-secondary-transparent p-3">InStock</th>
+													<th class="bg-secondary-transparent p-3">Unit Cost(₦)</th>
+													<th class="bg-secondary-transparent p-3">Supplier Cost(₦)</th>
+													<th class="bg-secondary-transparent p-3">QTY</th>
+													<th class="bg-secondary-transparent p-3">Action</th>
+												</tr>
+											</thead>
+
+											<tbody id="itemTableBody">
+												<tr class="item-row">
+													<td class="p-2 border relative">
+														<div class="search-form">
+															<input type="text" autocomplete="off" class="form-control productSearch" placeholder="Search Product">
+															<i data-feather="search" class="feather-search"></i>
+															<input type="hidden" name="product">
+															<div class="suggestions position-absolute bg-white border rounded" style="z-index:1000; display:none;"></div>
+														</div>
+													</td>
+
+													<td class="p-2 border"><select name="unitCode[]" class="form-control"></select></td>
+													<td class="p-2 border">
+                                                        <input type="number" name="quantity[]" class="form-control" readonly>
+													</td>
+													<td class="p-2 border">
+                                                        <input type="text" name="sellPrice[]" class="form-control" readonly>
+													</td>
+													<td class="p-2 border">
+                                                        <input type="text" class="form-control" readonly>
+													</td>
+														<td class="p-2 border">
+                                                        <input type="number" name="transferQTY" class="form-control">
+													</td>
+													<td class="p-2 border text-center">
+														<button type="button" class="deleteRowBtn btn btn-danger btn-sm">
+															<i class="fa fa-trash"></i>
+														</button>													
+													</td>
+												</tr>
+											</tbody>
+										</table>
+									</div>
+								</div>
+
+							</div>
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn me-2 btn-secondary" data-bs-dismiss="modal">Cancel</button>
+						<button type="submit" class="btn btn-primary">Transfer</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  let products = [];
+  const branchFromSelect = document.querySelector('#branch_from');
+  const tableBody = document.querySelector('#itemTableBody');
+
+  // Load products initially
+  loadProducts(branchFromSelect.value);
+
+  branchFromSelect.addEventListener('change', () => {
+    loadProducts(branchFromSelect.value);
+  });
+
+  async function loadProducts(branchId) {
+    try {
+      const res = await fetch(`/api/branch-products/${branchId}`);
+      products = await res.json();
+    } catch (err) {
+      console.error('Failed to load products', err);
+      products = [];
+    }
+  }
+
+  tableBody.addEventListener('input', (e) => {
+    if (e.target.classList.contains('productSearch')) {
+      const row = e.target.closest('.item-row');
+      let suggestionsDiv = row.querySelector('.suggestions');
+      if (!suggestionsDiv) {
+        suggestionsDiv = document.createElement('div');
+        suggestionsDiv.className = 'suggestions position-absolute bg-white border';
+        row.querySelector('td').appendChild(suggestionsDiv);
+      }
+
+      const term = e.target.value.trim().toLowerCase();
+      if (!term) {
+        suggestionsDiv.style.display = 'none';
+        suggestionsDiv.innerHTML = '';
+        return;
+      }
+
+      const matches = products.filter(p => p.product.toLowerCase().includes(term));
+      if (matches.length === 0) {
+        suggestionsDiv.style.display = 'none';
+        suggestionsDiv.innerHTML = '';
+        return;
+      }
+
+      suggestionsDiv.innerHTML = matches.map(p =>
+        `<div class="p-2 suggestion-item" data-name="${p.product}">${p.product}</div>`
+      ).join('');
+      suggestionsDiv.style.display = 'block';
+    }
+  });
+
+  tableBody.addEventListener('click', (e) => {
+    if (e.target.classList.contains('suggestion-item')) {
+      const row = e.target.closest('.item-row');
+      const productName = e.target.dataset.name;
+      const product = products.find(p => p.product === productName);
+
+      row.querySelector('.productSearch').value = product.product;
+      // Save product name to hidden input (or you can rename it to productName[] directly)
+      row.querySelector('input[name="product"]').value = product.product;
+
+      // fill unit select
+      const unitSelect = row.querySelector('select[name="unitCode[]"]');
+      unitSelect.innerHTML = '';
+      product.variants.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.unitCode;
+        opt.textContent = v.unitCode;
+        unitSelect.appendChild(opt);
+      });
+
+      // fill other fields with first variant
+      updateFields(row, product.variants[0]);
+
+      // hide suggestions
+      row.querySelector('.suggestions').style.display = 'none';
+    }
+
+    if (e.target.closest('.deleteRowBtn')) {
+      e.target.closest('.item-row').remove();
+    }
+  });
+
+  tableBody.addEventListener('change', (e) => {
+    if (e.target.name === 'unitCode[]') {
+      const row = e.target.closest('.item-row');
+      const productName = row.querySelector('input[name="product"]').value;
+      const product = products.find(p => p.product === productName);
+      const variant = product.variants.find(v => v.unitCode === e.target.value);
+      if (variant) updateFields(row, variant);
+    }
+  });
+
+  tableBody.addEventListener('input', (e) => {
+    if (e.target.name === 'transferQTY') {
+      const row = e.target.closest('.item-row');
+      const qty = parseInt(e.target.value, 10);
+      if (qty > 0 && !row.nextElementSibling) cloneRow();
+    }
+  });
+
+  function updateFields(row, variant) {
+    row.querySelector('input[name="quantity[]"]').value = variant.quantity || 0;
+    row.querySelector('input[name="sellPrice[]"]').value = variant.sellPrice || 0;
+    row.querySelector('input[name="supplierPrice"]').value = variant.supplierPrice || 0;
+  }
+
+  function cloneRow() {
+    const firstRow = tableBody.querySelector('.item-row');
+    const clone = firstRow.cloneNode(true);
+    clone.querySelectorAll('input').forEach(i => i.value = '');
+    const unitSelect = clone.querySelector('select[name="unitCode[]"]');
+    unitSelect.innerHTML = '';
+    // remove existing suggestions div
+    const sugg = clone.querySelector('.suggestions');
+    if (sugg) sugg.remove();
+    tableBody.appendChild(clone);
+  }
+});
+</script>
+
+
+
+
+		<!-- /Add Stock -->
+
+		<!-- Edit Stock -->
+		<div class="modal fade" id="edit-stock-transfer">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<div class="page-title">
+							<h4>Edit Transfer</h4>
+						</div>
+						<button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+							<span aria-hidden="true">&times;</span>
+						</button>
+					</div>
+					<form action="https://dreamspos.dreamstechnologies.com/html/template/stock-transfer.html">
+						<div class="modal-body">
+							<div class="row">
+								<div class="col-lg-6">
+									<div class="mb-3">
+										<label class="form-label">Warehouse From<span class="text-danger ms-1">*</span></label>
+										<select class="select">
+											<option>Lobar Handy</option>
+											<option>Quaint Warehouse</option>
+										</select>
+									</div>
+								</div>
+								<div class="col-lg-6">
+									<div class="mb-3">
+										<label class="form-label">Warehouse To<span class="text-danger ms-1">*</span></label>
+										<select class="select">
+											<option>Selosy</option>
+											<option>Logerro</option>
+										</select>
+									</div>
+								</div>
+								<div class="col-lg-12">
+									<div class="mb-3">
+										<label class="form-label">Reference No<span class="text-danger ms-1">*</span></label>
+										<input type="text" class="form-control" value="32434545">
+									</div>
+								</div>
+								<div class="col-lg-12">
+									<div class="mb-3 search-form">
+										<label class="form-label">Product<span class="text-danger ms-1">*</span></label>
+										<div class="position-relative">
+											<input type="text" class="form-control" value="Nike Jordan">
+											<i data-feather="search" class="feather-search"></i>
+										</div>
+									</div>
+								</div>
+								<div class="col-lg-12">
+									<div class="modal-body-table">
+										<div class="table-responsive">
+											<table class="table  datanew">
+												<thead>
+													<tr>
+														<th>Product</th>
+														<th>SKU</th>
+														<th>Category</th>
+														<th>Qty</th>
+														<th>Action</th>
+													</tr>
+												</thead>
+												<tbody>
+													<tr>
+														<td>
+															<div class="d-flex align-items-center">
+																<a href="javascript:void(0);" class="avatar avatar-md me-2">
+																	<img src="assets/img/products/stock-img-02.png" alt="product">
+																</a>
+																<a href="javascript:void(0);">Nike Jordan</a>
+															</div>												
+														</td>
+														<td>PT002</td>
+														<td>Nike</td>
+														<td>
+															<div class="product-quantity bg-gray-transparent border-0">
+																<span class="quantity-btn"><i data-feather="minus-circle" class="feather-search"></i></span>
+																<input type="text" class="quntity-input bg-transparent" value="2">
+																<span class="quantity-btn">+<i data-feather="plus-circle" class="plus-circle"></i></span>
+															</div>
+														</td>
+														<td>
+															<div class="edit-delete-action d-flex align-items-center justify-content-center">
+																<a class="p-2 d-flex align-items-center justify-content-center border rounded" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#delete">
+																	<i data-feather="trash-2" class="feather-trash-2"></i>
+																</a>
+															</div>
+														</td>
+													</tr>
+												</tbody>
+											</table>
+										</div>
+									</div>
+								</div>
+								<div class="col-lg-12">
+									<div class="mb-3 search-form mb-0">
+										<label class="form-label">Notes<span class="text-danger ms-1">*</span></label>
+										<textarea class="form-control">The Jordan brand is owned by Nike (owned by the Knight family), as, at the time, the company was building its strategy to work with athletes to launch shows that could inspire consumers.Although Jordan preferred Converse and Adidas, they simply could not match the offer Nike made. </textarea>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div class="modal-footer">
+							<button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancel</button>
+							<button type="submit" class="btn btn-primary">Save Changes</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+		<!-- /Edit Stock -->
+
+		<!-- Import Transfer -->
+		<div class="modal fade" id="view-notes">
+			<div class="modal-dialog modal-dialog-centered">
+				<div class="modal-content">
+					<div class="modal-header">
+						<div class="page-title">
+							<h4>Import Transfer</h4>
+						</div>
+						<button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+							<span aria-hidden="true">&times;</span>
+						</button>
+					</div>
+					<form action="https://dreamspos.dreamstechnologies.com/html/template/stock-transfer.html">
+						<div class="modal-body">
+							<div class="row">
+								<div class="col-lg-4 col-sm-6 col-12">
+									<div class="mb-3">
+										<label class="form-label">From<span class="text-danger ms-1">*</span></label>
+										<select class="select">
+											<option>select</option>
+											<option>Lavish Warehouse</option>
+											<option>Lobar Handy</option>
+											<option>Quaint Warehouse</option>
+										</select>
+									</div>
+								</div>
+								<div class="col-lg-4 col-sm-6 col-12">
+									<div class="mb-3">
+										<label class="form-label">To<span class="text-danger ms-1">*</span></label>
+										<select class="select">
+											<option>Select</option>
+											<option>North Zone Warehouse</option>
+											<option>Nova Storage Hub</option>
+											<option>Cool Warehouse</option>
+										</select>
+									</div>
+								</div>
+								<div class="col-lg-4 col-sm-6 col-12">
+									<div class="mb-3">
+										<label class="form-label">Satus<span class="text-danger ms-1">*</span></label>
+										<select class="select">
+											<option>Select</option>
+											<option>Sent</option>
+											<option>Pending</option>
+										</select>
+									</div>
+								</div>
+								<div class="col-lg-12 col-sm-6 col-12">
+									<div class="row">
+										<div>
+											<div class="modal-footer-btn download-file">
+												<a href="javascript:void(0)" class="btn btn-submit">Download Sample File</a>
+											</div>
+										</div>
+									</div>
+								</div>
+								<div class="col-lg-12">
+									<div class="mb-3 image-upload-down">
+										<label class="form-label">	Upload CSV File</label>
+										<div class="image-upload download">
+											<input type="file">
+											<div class="image-uploads">
+												<img src="assets/img/download-img.png" alt="img">
+												<h4>Drag and drop a <span>file to upload</span></h4>
+											</div>
+										</div>
+									</div>
+								</div>
+								<div class="col-lg-12 col-sm-6 col-12">
+									<div class="mb-3">
+										<label class="form-label">Shipping<span class="text-danger ms-1">*</span></label>
+										<input type="text" class="form-control">
+									</div>
+								</div>
+							</div>
+							<div class="col-lg-12">
+								<div class="mb-3">
+									<label class="form-label">Description</label>
+									<textarea class="form-control" rows="3"></textarea>
+								</div>
+							</div>
+						</div>
+						<div class="modal-footer">
+							<button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancel</button>
+							<button type="submit" class="btn btn-primary">Submit</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+		<!-- /Import Transfer -->
+
+		<!-- Delete -->
+		<div class="modal fade modal-default" id="delete">
+			<div class="modal-dialog modal-dialog-centered">
+				<div class="modal-content">
+					<div class="modal-body p-0">
+						<div class="success-wrap text-center">
+							<form action="https://dreamspos.dreamstechnologies.com/html/template/stock-transfer.html">
+								<div class="icon-success bg-danger-transparent text-danger mb-2">
+									<i class="ti ti-trash"></i>
+								</div>
+								<h3 class="mb-2">Delete Stock Transfer</h3>
+								<p class="fs-16 mb-3">Are you sure you want to delete stock transfer?</p>
+								<div class="d-flex align-items-center justify-content-center gap-2 flex-wrap">
+									<button type="button" class="btn btn-md btn-secondary" data-bs-dismiss="modal">No, Cancel</button>
+									<button type="submit" class="btn btn-md btn-primary">Yes, Delete</button>
+								</div>
+							</form>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<!-- /Delete -->
+		  
+		<!-- jQuery -->
+        <script src="assets/js/jquery-3.7.1.min.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
+
+        <!-- Feather Icon JS -->
+		<script src="assets/js/feather.min.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
+
+		<!-- Slimscroll JS -->
+		<script src="assets/js/jquery.slimscroll.min.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
+
+		<!-- Datatable JS -->
+		<script src="assets/js/jquery.dataTables.min.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
+		<script src="assets/js/dataTables.bootstrap5.min.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
+		
+		<!-- Bootstrap Core JS -->
+        <script src="assets/js/bootstrap.bundle.min.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
+		
+		<!-- Datetimepicker JS -->
+		<script src="assets/js/moment.min.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
+		<script src="assets/js/bootstrap-datetimepicker.min.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
+
+		<!-- Summernote JS -->
+		<script src="assets/plugins/summernote/summernote-bs4.min.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
+
+		<!-- Select2 JS -->
+		<script src="assets/plugins/select2/js/select2.min.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
+
+		<!-- Color Picker JS -->
+		<script src="assets/plugins/%40simonwep/pickr/pickr.es5.min.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
+
+		<!-- Custom JS -->
+		<script src="assets/js/theme-colorpicker.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
+		<script src="assets/js/script.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
+
+	
+    <script src="../../cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="aeefd15cc0c25532d2598a2d-|49" defer></script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"951ebabf5bd8d7e3","version":"2025.6.2","serverTiming":{"name":{"cfExtPri":true,"cfEdge":true,"cfOrigin":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}},"token":"3ca157e612a14eccbb30cf6db6691c29","b":1}' crossorigin="anonymous"></script>
+</body>
+
+<!-- Mirrored from dreamspos.dreamstechnologies.com/html/template/stock-transfer.html by HTTrack Website Copier/3.x [XR&CO'2014], Wed, 18 Jun 2025 23:59:16 GMT -->
+</html>

@@ -51,6 +51,9 @@ const ParkingStore = require("../model/ParkingStore");
 const ParkingStock = require("../model/ParkingStock");
 const Config = require('../model/NegSales');
 const Notification = require('../model/Notification');
+const StockAdjustment = require('../model/StockAdjustment');
+const PriceAdjustment = require('../model/PriceAdjustment');
+const TransferStock = require('../model/TransferStock');
 router.use(require("../routes/query"))
 
 
@@ -690,11 +693,12 @@ router.get("/product-details/:id", async (req, res) => {
 
 
 router.get('/edit-product/:id', async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect('/sign-in');
+  if (!req.isAuthenticated()) return res.redirect('/');
 
   try {
     const user = await User.findById(req.user._id).populate('branch');
-    const product = await Product.findById(req.params.id).populate('category branch variants.supplier');
+    const product = await Product.findById(req.params.id)
+      .populate('category branch variants.supplier');
 
     if (!product) return res.redirect('/error-404');
 
@@ -702,12 +706,688 @@ router.get('/edit-product/:id', async (req, res) => {
       return res.redirect('/unauthorized');
     }
 
-    res.render('Product/editProduct', { user, product });
+    const categories = await Category.find();       // get categories for the dropdown
+    const units = await Unit.find();                // get units for the variants dropdown
+
+    res.render('Product/editProduct', { user, product, categories, units });
   } catch (err) {
     console.error(err);
     res.redirect('/error-404');
   }
 });
+
+
+router.post('/editProduct/:id', upload.single('product_image'), async (req, res, next) => {
+  try {
+    const productId = req.params.id;
+    const {
+      product,
+      category,
+      product_detail,
+      mfgDate,
+      expDate,
+      quantity,
+      unitCode,
+      lowStockAlert,
+      sellPrice
+    } = req.body;
+
+    const productDoc = await Product.findById(productId);
+    if (!productDoc) return res.status(404).send('Product not found');
+
+    let productModified = false;
+
+    // Update product-level fields if changed
+    if (product && product !== productDoc.product) {
+      productDoc.product = product;
+      productModified = true;
+    }
+    if (category && category != productDoc.category.toString()) {
+      productDoc.category = category;
+      productModified = true;
+    }
+    if (product_detail && product_detail !== productDoc.product_detail) {
+      productDoc.product_detail = product_detail;
+      productModified = true;
+    }
+    if (mfgDate && new Date(mfgDate).toISOString() !== productDoc.mfgDate.toISOString()) {
+      productDoc.mfgDate = new Date(mfgDate);
+      productModified = true;
+    }
+    if (expDate && new Date(expDate).toISOString() !== productDoc.expDate.toISOString()) {
+      productDoc.expDate = new Date(expDate);
+      productModified = true;
+    }
+
+    if (req.file) {
+      productDoc.product_image = req.file.filename;
+      productModified = true;
+    }
+
+    // Convert arrays
+    const quantities = Array.isArray(quantity) ? quantity.map(Number) : [Number(quantity)];
+    const unitCodes = Array.isArray(unitCode) ? unitCode : [unitCode];
+    const lowStockAlerts = Array.isArray(lowStockAlert) ? lowStockAlert.map(Number) : [Number(lowStockAlert)];
+    const sellPrices = Array.isArray(sellPrice) ? sellPrice.map(Number) : [Number(sellPrice)];
+
+    const existingVariants = productDoc.variants;
+    let baseQty = quantities[0]; // first variant is base
+    let originalBaseQty = existingVariants[0].quantity;
+    let baseQtyChange = baseQty - originalBaseQty;
+
+    let ledgerVariants = [];
+
+    // Loop and update variants
+    for (let i = 0; i < existingVariants.length; i++) {
+      let variant = existingVariants[i];
+      let updated = false;
+
+      if (variant.unitCode !== unitCodes[i]) {
+        variant.unitCode = unitCodes[i];
+        updated = true;
+      }
+
+      if (variant.lowStockAlert !== lowStockAlerts[i]) {
+        variant.lowStockAlert = lowStockAlerts[i];
+        updated = true;
+      }
+
+      if (variant.sellPrice !== sellPrices[i]) {
+        variant.sellPrice = sellPrices[i];
+        updated = true;
+      }
+
+      // Handle quantity / totalInBaseUnit changes
+      if (i === 0) {
+        // Base unit
+        if (variant.quantity !== baseQty) {
+          variant.quantity = baseQty;
+          updated = true;
+        }
+      } else {
+        let submittedTotalInBaseUnit = quantities[i]; // user edited value
+        if (variant.totalInBaseUnit !== submittedTotalInBaseUnit) {
+          variant.totalInBaseUnit = submittedTotalInBaseUnit;
+          variant.quantity = baseQty * submittedTotalInBaseUnit;
+          updated = true;
+        } else if (baseQtyChange !== 0) {
+          // baseQty changed, recalculate
+          variant.quantity = baseQty * variant.totalInBaseUnit;
+          updated = true;
+        }
+      }
+
+      // Update totalWorth, totalPotentialRevenue
+      variant.totalWorth = variant.quantity * productDoc.supplierPrice;
+      variant.totalPotentialRevenue = variant.quantity * variant.sellPrice;
+
+      if (updated) productModified = true;
+
+      // Detect stock change: only stock_in or stock_out if quantity changed
+      let qtyChange = variant.quantity - existingVariants[i].quantity;
+      ledgerVariants.push({
+        unitCode: variant.unitCode,
+        stock_in: qtyChange > 0 ? qtyChange : 0,
+        stock_out: qtyChange < 0 ? Math.abs(qtyChange) : 0,
+        balance: variant.quantity
+      });
+    }
+
+    if (productModified) {
+      await productDoc.save();
+
+      // Add StockLedger entry
+      await StockLedger.create({
+        date: new Date(),
+        product: productDoc._id,
+        variants: ledgerVariants,
+        operator: req.user ? req.user._id : null,
+        branch: productDoc.branch
+      });
+    }
+
+    res.redirect('/manageProduct'); // or wherever you list products
+  } catch (err) {
+    console.error(err);
+    next(err);
+  }
+});
+
+
+router.get("/adjustStock", async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  const selectedBranchId = req.query.branchId;
+
+  try {
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/");
+
+    const units = await Unit.find();
+
+    if (user.role === 'owner') {
+      const allBranches = await Branch.find();
+      const branchToUse = selectedBranchId || user.branch._id;
+
+      // 🟩 Find products in that branch
+      const products = await Product.find({ branch: branchToUse })
+        .populate('category')
+        .populate('branch');
+
+      // 🟩 Find recent stock adjustments in that branch
+      const adjustments = await StockAdjustment.find()
+        .where('product').in(products.map(p => p._id))
+        .populate('adjustedBy')
+        .populate('product')
+        .sort({ createdAt: -1 })
+        .limit(20); // latest 20
+
+      res.render("Product/stock-adjustment", {
+        user,
+        ownerBranch: { branch: user.branch },
+        branches: allBranches,
+        selectedBranchId: branchToUse,
+        products,
+        units,
+        adjustments
+      });
+    } else {
+      // staff: only their branch
+      const products = await Product.find({ branch: user.branch._id })
+        .populate('category')
+        .populate('branch');
+
+      const adjustments = await StockAdjustment.find()
+        .where('product').in(products.map(p => p._id))
+        .populate('adjustedBy')
+        .populate('product')
+        .sort({ createdAt: -1 })
+        .limit(20);
+
+      res.render("Product/stock-adjustment", {
+        user,
+        ownerBranch: { branch: user.branch },
+        branches: [user.branch],
+        selectedBranchId: user.branch._id,
+        products,
+        units,
+        adjustments
+      });
+    }
+  } catch (err) {
+    console.error("Error loading adjustStock page:", err);
+    res.redirect("/error-404");
+  }
+});
+
+router.post('/delete-stock-adjustment/:id', async (req, res, next) => {
+  try {
+    await StockAdjustment.findByIdAndDelete(req.params.id);
+    res.redirect('/adjustStock'); // or wherever your page is
+  } catch (err) {
+    console.error('Error deleting adjustment:', err);
+    next(err);
+  }
+});
+
+
+router.get('/search-product', async (req, res) => {
+  const q = req.query.q.toLowerCase();
+  const products = await Product.find({ product: { $regex: q, $options: 'i' } }).select('product _id');
+  res.json(products);
+});
+
+router.get('/get-product/:id', async (req, res) => {
+  const product = await Product.findById(req.params.id);
+  res.json(product);
+});
+
+
+router.post('/adjust-stock', async (req, res, next) => {
+  try {
+    const { product, unitCode, adjustQty, adjustmentType, notes } = req.body;
+    const branch = req.user ? req.user.branch : null;
+    const operator = req.user ? req.user._id : null;
+
+    if (!product || !unitCode || !adjustQty || !adjustmentType || !branch) {
+      return res.status(400).send('Missing required fields.');
+    }
+
+    const adjustNum = parseFloat(adjustQty);
+    if (isNaN(adjustNum) || adjustNum <= 0) {
+      return res.status(400).send('Invalid adjustQty.');
+    }
+
+    const prod = await Product.findById(product);
+    if (!prod) return res.status(404).send('Product not found');
+
+    const variants = prod.variants || [];
+    const targetVariant = variants.find(v => v.unitCode === unitCode[0]);
+    if (!targetVariant) return res.status(404).send('Variant not found');
+
+    let newTargetQty = targetVariant.quantity;
+    if (adjustmentType === 'increase') {
+      newTargetQty += adjustNum;
+    } else if (adjustmentType === 'decrease') {
+      newTargetQty -= adjustNum;
+      if (newTargetQty < 0) newTargetQty = 0;
+    } else {
+      return res.status(400).send('Invalid adjustmentType');
+    }
+    targetVariant.quantity = newTargetQty;
+
+    let newBaseQty;
+    if (!targetVariant.totalInBaseUnit || targetVariant.totalInBaseUnit === 0) {
+      newBaseQty = newTargetQty;
+    } else {
+      newBaseQty = newTargetQty / targetVariant.totalInBaseUnit;
+    }
+
+    for (const v of variants) {
+      if (!v.totalInBaseUnit || v.totalInBaseUnit === 0) {
+        v.quantity = newBaseQty;
+      } else {
+        v.quantity = newBaseQty * v.totalInBaseUnit;
+      }
+    }
+
+    await prod.save();
+
+    await StockLedger.create({
+      date: new Date(),
+      product: prod._id,
+      variants: variants.map(v => ({
+        unitCode: v.unitCode,
+        stock_in: adjustmentType === 'increase' && v.unitCode === unitCode[0] ? adjustNum : 0,
+        stock_out: adjustmentType === 'decrease' && v.unitCode === unitCode[0] ? adjustNum : 0,
+        balance: v.quantity
+      })),
+      notes,
+      operator,
+      branch
+    });
+
+    await StockAdjustment.create({
+      product: prod._id,
+      adjustedBy: operator,
+      notes,
+      variants: [
+        {
+          unitCode: unitCode[0],
+          adjustmentType,
+          quantity: adjustNum
+        }
+      ]
+    });
+
+    res.redirect('/adjustStock');
+  } catch (err) {
+    console.error('Error adjusting stock:', err);
+    next(err);
+  }
+});
+
+
+
+router.get('/price-adjustments', async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect('/');
+
+  try {
+    const selectedBranchId = req.query.branchId;
+
+    // get logged in user & branch
+    const user = await User.findById(req.user._id).populate('branch');
+    if (!user) return res.redirect('/');
+
+    // get units (if you need them on the page)
+    const units = await Unit.find();
+
+    if (user.role === 'owner') {
+      // owner: see all branches & pick one
+      const allBranches = await Branch.find();
+      const branchToUse = selectedBranchId || user.branch._id;
+
+      // get products of selected branch
+      const products = await Product.find({ branch: branchToUse })
+                                    .populate('category')
+                                    .populate('branch');
+
+      // get all price adjustments for these products
+      const adjustments = await PriceAdjustment.find({ product: { $in: products.map(p => p._id) } })
+                                  .populate('product')
+                                  .populate('adjustedBy')
+                                  .sort({ createdAt: -1 });
+
+      res.render('Product/price-adjustment', {
+        user,
+        ownerBranch: { branch: user.branch },
+        branches: allBranches,
+        selectedBranchId: branchToUse,
+        products,
+        adjustments,
+        units
+      });
+
+    } else {
+      // staff: see only their branch
+      const products = await Product.find({ branch: user.branch._id })
+                                    .populate('category')
+                                    .populate('branch');
+
+      const adjustments = await PriceAdjustment.find({ product: { $in: products.map(p => p._id) } })
+                                  .populate('product')
+                                  .populate('adjustedBy')
+                                  .sort({ createdAt: -1 });
+
+      res.render('Product/price-adjustment', {
+        user,
+        ownerBranch: { branch: user.branch },
+        branches: [user.branch],
+        selectedBranchId: user.branch._id,
+        products,
+        adjustments,
+        units
+      });
+    }
+
+  } catch (err) {
+    console.error('Error loading price adjustment page:', err);
+    res.redirect('/error-404');
+  }
+});
+
+router.post('/adjust-price', async (req, res, next) => {
+  try {
+    const { product, unitCode, adjustPrice, notes } = req.body;
+    const operator = req.user ? req.user._id : null;
+
+    if (!product || !unitCode || !adjustPrice || !operator) {
+      return res.status(400).send('Missing required fields.');
+    }
+
+    const newPrice = parseFloat(adjustPrice);
+    if (isNaN(newPrice) || newPrice <= 0) {
+      return res.status(400).send('Invalid adjustPrice.');
+    }
+
+    const prod = await Product.findById(product);
+    if (!prod) return res.status(404).send('Product not found');
+
+    const variants = prod.variants || [];
+    const variant = variants.find(v => v.unitCode === unitCode[0]);
+    if (!variant) return res.status(404).send('Variant not found');
+
+    const oldPrice = variant.sellPrice || 0;
+    variant.sellPrice = newPrice;
+
+    await prod.save();
+
+    await PriceAdjustment.create({
+      product: prod._id,
+      adjustedBy: operator,
+      notes,
+      variants: [
+        {
+          unitCode: unitCode[0],
+          oldPrice,
+          newPrice
+        }
+      ]
+    });
+
+    res.redirect('/price-adjustments');
+  } catch (err) {
+    console.error('Error adjusting price:', err);
+    next(err);
+  }
+});
+
+router.post('/delete-price-adjustment/:id', async (req, res, next) => {
+  try {
+    const adjustmentId = req.params.id;
+
+    await PriceAdjustment.findByIdAndDelete(adjustmentId);
+
+    res.redirect('/price-adjustments');
+  } catch (err) {
+    console.error('Error deleting price adjustment:', err);
+    next(err);
+  }
+});
+
+
+router.get("/stockTransfer", (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/sign-in");
+
+  const selectedBranchId = req.query.branchId;
+
+  User.findById(req.user._id)
+    .populate("branch")
+    .then(user => {
+      if (!user) return res.redirect("/sign-in");
+
+      // OWNER: Can choose any branch
+      if (user.role === 'owner') {
+        Branch.findById(user.branch)
+          .then(ownerBranch => {
+            Branch.find()
+              .then(allBranches => {
+                const branchToFilter = selectedBranchId || ownerBranch._id;
+
+                Product.find({ branch: branchToFilter })
+                  .populate('variants.supplier')
+                  .populate('branch')
+                  .then(products => {
+                    res.render("Product/stockTransfer", {
+                      user,
+                      ownerBranch: { branch: ownerBranch },
+                      branches: allBranches,
+                      selectedBranchId: branchToFilter,
+                      products
+                    });
+                  })
+                  .catch(productErr => {
+                    console.error(productErr);
+                    res.status(500).send("Error fetching products.");
+                  });
+              })
+              .catch(branchErr => {
+                console.error(branchErr);
+                res.status(500).send("Error fetching branches.");
+              });
+          })
+          .catch(err => {
+            console.error(err);
+            res.status(500).send("Error fetching owner branch.");
+          });
+      } else {
+        // ADMIN or STAFF: only their own branch
+        Product.find({ branch: user.branch._id })
+          .populate('variants.supplier')
+          .populate('branch')
+          .then(products => {
+            Branch.find()
+              .then(allBranches => {
+                res.render("Product/stockTransfer", {
+                  user,
+                  ownerBranch: { branch: user.branch },
+                  branches: allBranches,
+                  selectedBranchId: user.branch._id,
+                  products
+                });
+              })
+              .catch(branchErr => {
+                console.error(branchErr);
+                res.status(500).send("Error fetching branches.");
+              });
+         
+          })
+         
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      res.status(500).send("Error finding user.");
+    });
+});
+
+router.get('/api/branch-products/:branchId', async (req, res) => {
+  try {
+    const products = await Product.find({ branch: req.params.branchId })
+      .select('product variants');
+    res.json(products);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// router.post("/stock-transfer", async (req, res) => {
+//   console.log("Received stock transfer request:", req.body);
+  
+// });
+router.post('/stock-transfer', async (req, res, next) => {
+  const {
+    branch_from,
+    branch_to,
+    product,
+    unitCode,
+    quantity,
+    sellPrice,
+    transferQTY,
+    invoice_number,
+    payment_date
+  } = req.body;
+
+  const transferQty = parseFloat(transferQTY);
+  const unit = unitCode[0];
+  const receivingBranch = branch_to;
+  const sendingBranch = branch_from;
+  const userId = req.user._id;
+
+  try {
+    // 1. Find source product
+    const sourceProduct = await Product.findOne({ product, branch: sendingBranch });
+    if (!sourceProduct) throw new Error('Product not found in source branch');
+
+    // 2. Get index of the variant being transferred
+    const variantIndex = sourceProduct.variants.findIndex(v => v.unitCode === unit);
+    if (variantIndex === -1) throw new Error(`Unit ${unit} not found in source product`);
+
+    // 3. Check if product exists in receiving branch
+    let receivingProduct = await Product.findOne({ product, branch: receivingBranch });
+
+    if (!receivingProduct) {
+      // CLONE PRODUCT TO RECEIVING BRANCH
+
+      // Deep clone variants
+      const clonedVariants = JSON.parse(JSON.stringify(sourceProduct.variants));
+
+      // Adjust variant quantities: only transferred unit gets transferQty
+      const baseQty = transferQty;
+      for (let i = 0; i < clonedVariants.length; i++) {
+        if (clonedVariants[i].unitCode === unit) {
+          clonedVariants[i].quantity = baseQty;
+        } else {
+          clonedVariants[i].quantity = baseQty * (clonedVariants[i].totalInBaseUnit || 0);
+        }
+      }
+
+      receivingProduct = await Product.create({
+        product: sourceProduct.product,
+        category: sourceProduct.category,
+        branch: receivingBranch,
+        product_detail: sourceProduct.product_detail,
+        mfgDate: sourceProduct.mfgDate,
+        expDate: sourceProduct.expDate,
+        product_image: sourceProduct.product_image,
+        supplierPrice: sourceProduct.supplierPrice,
+        variants: clonedVariants
+      });
+
+      await Branch.findByIdAndUpdate(receivingBranch, {
+        $addToSet: { stock: receivingProduct._id }
+      });
+    } else {
+      // PRODUCT EXISTS IN RECEIVING BRANCH — update its variants
+      const receivingVariantIndex = receivingProduct.variants.findIndex(v => v.unitCode === unit);
+      if (receivingVariantIndex === -1) throw new Error('Unit not found in receiving product');
+
+      // Add to matching variant
+      receivingProduct.variants[receivingVariantIndex].quantity += transferQty;
+
+      // Recalculate other variants based on totalInBaseUnit
+      const newBaseQty = receivingProduct.variants[receivingVariantIndex].quantity;
+      for (let i = 0; i < receivingProduct.variants.length; i++) {
+        if (i === receivingVariantIndex) continue;
+        const factor = receivingProduct.variants[i].totalInBaseUnit || 0;
+        receivingProduct.variants[i].quantity = newBaseQty * factor;
+      }
+
+      await receivingProduct.save();
+    }
+
+    // 4. UPDATE SOURCE PRODUCT
+    sourceProduct.variants[variantIndex].quantity -= transferQty;
+    if (sourceProduct.variants[variantIndex].quantity < 0) {
+      return res.status(400).json({ error: 'Insufficient quantity in source branch.' });
+    }
+
+    const updatedQty = sourceProduct.variants[variantIndex].quantity;
+
+    // Recalculate other variants in source branch
+    for (let i = 0; i < sourceProduct.variants.length; i++) {
+      if (i === variantIndex) continue;
+      const factor = sourceProduct.variants[i].totalInBaseUnit || 0;
+      sourceProduct.variants[i].quantity = updatedQty * factor;
+    }
+
+    await sourceProduct.save();
+
+    // 5. LOG TO STOCKLEDGER
+
+    const createLedgerEntry = async (branch, type, productDoc, qtyChange) => {
+      return StockLedger.create({
+        date: new Date(payment_date),
+        product: productDoc._id,
+        operator: userId,
+        branch,
+        variants: productDoc.variants.map(v => ({
+          unitCode: v.unitCode,
+          stock_in: type === 'in' && v.unitCode === unit ? qtyChange : 0,
+          stock_out: type === 'out' && v.unitCode === unit ? qtyChange : 0,
+          balance: v.quantity
+        }))
+      });
+    };
+
+    await createLedgerEntry(sendingBranch, 'out', sourceProduct, transferQty);
+    await createLedgerEntry(receivingBranch, 'in', receivingProduct, transferQty);
+
+    // 6. LOG TO TRANSFERSTOCK
+
+    await TransferStock.create({
+      branch_from: sendingBranch,
+      branch_to: receivingBranch,
+      product: sourceProduct._id,
+      unitCode: unit,
+      quantity: transferQty,
+      invoice_number,
+      date: new Date(payment_date),
+      createdBy: userId
+    });
+
+    res.status(200).json({ message: 'Stock transfer successful.' });
+  } catch (err) {
+    console.error('Transfer stock error:', err);
+    next(err);
+  }
+});
+
+
+
+
+
 
 // STOCK ROUTE ENDS HERE 
 

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+	<!-- Meta Tags -->
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="Dreams POS is a powerful Bootstrap based Inventory Management Admin Template designed for businesses, offering seamless invoicing, project tracking, and estimates.">
+	<meta name="keywords" content="inventory management, admin dashboard, bootstrap template, invoicing, estimates, business management, responsive admin, POS system">
+	<meta name="author" content="Dreams Technologies">
+	<meta name="robots" content="index, follow">
+	<title>Dreams POS - Inventory Management & Admin Dashboard Template</title>
+	
+	<script src="assets/js/theme-script.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+
+	<!-- Favicon -->
+	<link rel="shortcut icon" type="image/x-icon" href="assets/img/favicon.png">
+
+	<!-- Apple Touch Icon -->
+	<link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
+	
+	<!-- Bootstrap CSS -->
+	<link rel="stylesheet" href="assets/css/bootstrap.min.css">
+	
+	<!-- animation CSS -->
+	<link rel="stylesheet" href="assets/css/animate.css">
+
+	<!-- Select2 CSS -->
+	<link rel="stylesheet" href="assets/plugins/select2/css/select2.min.css">
+
+	<!-- Summernote CSS -->
+	<link rel="stylesheet" href="assets/plugins/summernote/summernote-bs4.min.css">
+
+	<!-- Datetimepicker CSS -->
+	<link rel="stylesheet" href="assets/css/bootstrap-datetimepicker.min.css">
+
+	<!-- Datatable CSS -->
+	<link rel="stylesheet" href="assets/css/dataTables.bootstrap5.min.css">
+	
+	<!-- Fontawesome CSS -->
+	<link rel="stylesheet" href="assets/plugins/fontawesome/css/fontawesome.min.css">
+	<link rel="stylesheet" href="assets/plugins/fontawesome/css/all.min.css">
+
+	<!-- Tabler Icon CSS -->
+	<link rel="stylesheet" href="assets/plugins/tabler-icons/tabler-icons.min.css">
+
+	<!-- Color Picker Css -->
+<link rel="stylesheet" href="assets/plugins/%40simonwep/pickr/themes/nano.min.css">
+
+	<!-- Main CSS -->
+	<link rel="stylesheet" href="assets/css/style.css">
+	
+</head>
+    <body>
+		
+		<div id="global-loader" >
+			<div class="whirly-loader"> </div>
+		</div>
+
+		<!-- Main Wrapper -->
+        <div class="main-wrapper">
+			<%- include('../partials/header') %>
+
+			<div class="page-wrapper">
+				<div class="content">
+					<div class="page-header">
+						<div class="add-item d-flex">
+							<div class="page-title">
+								<h4>Invoices</h4>
+								<h6>Manage your stock invoices</h6>
+							</div>							
+						</div>
+						<ul class="table-top-head">
+							<li>
+								<a data-bs-toggle="tooltip" data-bs-placement="top" title="Pdf"><img src="assets/img/icons/pdf.svg" alt="img"></a>
+							</li>
+							<li>
+								<a data-bs-toggle="tooltip" data-bs-placement="top" title="Excel"><img src="assets/img/icons/excel.svg" alt="img"></a>
+							</li>
+							<li>
+								<a data-bs-toggle="tooltip" data-bs-placement="top" title="Refresh"><i class="ti ti-refresh"></i></a>
+							</li>
+							<li>
+								<a data-bs-toggle="tooltip" data-bs-placement="top" title="Collapse" id="collapse-header"><i class="ti ti-chevron-up"></i></a>
+							</li>
+						</ul>
+					</div>
+					
+					<div class="card">
+						<div class="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
+							<div class="search-set">
+								<div class="search-input">
+									<span class="btn-searchset"><i class="ti ti-search fs-14 feather-search"></i></span>
+								</div>
+							</div>
+							<div class="d-flex table-dropdown my-xl-auto right-content align-items-center flex-wrap row-gap-3">
+								<div class="dropdown me-2">
+									<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
+										Customer
+									</a>
+									<ul class="dropdown-menu  dropdown-menu-end p-3">
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Carl Evans</a>
+										</li>
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Minerva Rameriz</a>
+										</li>
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Robert Lamon</a>
+										</li>
+										<li>
+											<a href="javascript:void(0);" class="dropdown-item rounded-1">Patricia Lewis</a>
+										</li>
+									</ul>
+								</div>
+							</div>
+						</div>
+						<div class="card-body p-0">
+							<div class="table-responsive">
+								<table class="table datatable">
+									<thead class="thead-light">
+										<tr>
+											<th>Invoice No</th>
+											<th>Customer</th>
+											<th>Due Date</th>
+											<th>Amount</th>
+											<th>Paid</th>
+											<th>Amount Due</th>
+											<th>Status</th>
+											<th class="no-sort"></th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td><a href="invoice-details-2.html">INV001</a></td>
+											<td>
+												<div class="d-flex align-items-center">
+													<a href="javascript:void(0);" class="avatar avatar-md me-2">
+														<img src="assets/img/users/user-27.jpg" alt="product">
+													</a>
+													<a href="javascript:void(0);">Carl Evans</a>
+												</div>
+											</td>
+											<td>
+												24 Dec 2024												
+											</td>
+											<td>
+												$1000
+											</td>
+											<td>$1000</td>
+											<td>$0.00</td>
+											<td><span class="badge badge-soft-success badge-xs shadow-none"><i class="ti ti-point-filled me-1"></i>Paid</span></td>
+											<td class="d-flex">
+												<div class="edit-delete-action d-flex align-items-center justify-content-center">
+													<a class="me-2 p-2 d-flex align-items-center justify-content-between border rounded" href="invoice-details.html">
+														<i data-feather="eye" class="feather-eye"></i>
+													</a>
+													<a class="p-2 d-flex align-items-center justify-content-between border rounded" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#delete">
+														<i data-feather="trash-2" class="feather-trash-2"></i>
+													</a>
+												</div>
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+					<!-- /product list -->
+				</div>
+				<div class="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
+					<p class="mb-0">2025 &copy; AJELIELE. All Right Reserved</p>
+					<p>Developed by <a href="javascript:void(0);" class="text-primary">Tech Mayor Groups</a></p>
+				</div>
+			</div>
+        </div>
+		<!-- /Main Wrapper -->
+
+		<!-- jQuery -->
+        <script src="assets/js/jquery-3.7.1.min.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+
+        <!-- Feather Icon JS -->
+		<script src="assets/js/feather.min.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+
+		<!-- Slimscroll JS -->
+		<script src="assets/js/jquery.slimscroll.min.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+
+		<!-- Datatable JS -->
+		<script src="assets/js/jquery.dataTables.min.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+		<script src="assets/js/dataTables.bootstrap5.min.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+		
+		<!-- Bootstrap Core JS -->
+        <script src="assets/js/bootstrap.bundle.min.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+		
+		<!-- Datetimepicker JS -->
+		<script src="assets/js/moment.min.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+		<script src="assets/js/bootstrap-datetimepicker.min.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+
+		<!-- Summernote JS -->
+		<script src="assets/plugins/summernote/summernote-bs4.min.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+
+		<!-- Select2 JS -->
+		<script src="assets/plugins/select2/js/select2.min.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+
+		<!-- Color Picker JS -->
+		<script src="assets/plugins/%40simonwep/pickr/pickr.es5.min.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+
+		<!-- Custom JS -->
+		<script src="assets/js/theme-colorpicker.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+		<script src="assets/js/script.js" type="c4a80e8e5e26fc9b7bb24352-text/javascript"></script>
+
+	
+    <script src="../../cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="c4a80e8e5e26fc9b7bb24352-|49" defer></script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"951ebb19df17d7e3","version":"2025.6.2","serverTiming":{"name":{"cfExtPri":true,"cfEdge":true,"cfOrigin":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}},"token":"3ca157e612a14eccbb30cf6db6691c29","b":1}' crossorigin="anonymous"></script>
+</body>
+
+<!-- Mirrored from dreamspos.dreamstechnologies.com/html/template/invoice.html by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 19 Jun 2025 00:00:32 GMT -->
+</html>
