@@ -8,7 +8,6 @@ const Supplier = require("../model/Supplier");
 const Category = require("../model/Category");
 const Branch = require("../model/Branch");
 const Product = require("../model/Product");
-const SupplierInvoice = require('../model/supplierInvoice');
 const Customer = require('../model/Customer'); 
 const Loan = require('../model/Loan');
 const ReceivedStock = require('../model/ReceivedStock');

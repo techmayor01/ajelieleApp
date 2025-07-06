@@ -164,44 +164,56 @@
 						</div>
 						<div class="card-body p-0">
 							<div class="table-responsive">
-								<table class="table datatable">
-									<thead class="thead-light">
-										<tr>
-											<th>From Warehouse</th>
-											<th>To Warehouse</th>
-											<th>No of Products</th>
-											<th>Quantity Transfered</th>
-											<th>Ref Number</th>
-											<th>Date</th>
-											<th class="no-sort"></th>
-										</tr>
-									</thead>
-									<tbody>
-										<tr>
-											<td>Lavish Warehouse </td>
-											<td>North Zone Warehouse </td>
-											<td>
-												20												
-											</td>
-											<td>
-												15
-											</td>
-											<td>#458924</td>
-											<td>24 Dec 2024</td>
-											<td class="d-flex">
-												<div class="edit-delete-action d-flex align-items-center justify-content-center">
-													<a class="me-2 p-2 d-flex align-items-center justify-content-between border rounded" href="#" data-bs-toggle="modal" data-bs-target="#edit-stock-transfer">
-														<i data-feather="edit" class="feather-edit"></i>
-													</a>
-													<a class="p-2 d-flex align-items-center justify-content-between border rounded" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#delete">
-														<i data-feather="trash-2" class="feather-trash-2"></i>
-													</a>
-												</div>
-												
-											</td>
-										</tr>
-									</tbody>
-								</table>
+								<% if (Array.isArray(transfers) && transfers.length > 0) { %>
+  <table class="table datatable" id="DataTables_Table_0">
+    <thead class="thead-light">
+      <tr>
+        <th>From Branch</th>
+        <th>To Branch</th>
+        <th>No of Products</th>
+        <th>Quantity Transferred</th>
+        <th>Ref Number</th>
+        <th>Date</th>
+        <th class="no-sort"></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% transfers.forEach(t => { %>
+        <tr>
+          <td><%= t.branch_from?.branch_name || 'N/A' %></td>
+          <td><%= t.branch_to?.branch_name || 'N/A' %></td>
+          <td>1</td>
+          <td><%= t.quantity %></td>
+          <td>#<%= t.invoice_number %></td>
+          <td><%= new Date(t.date).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' }) %></td>
+          <td>
+            <div class="edit-delete-action d-flex align-items-center justify-content-center">
+              <a class="me-2 p-2 d-flex align-items-center justify-content-between border rounded"
+                 href="#"
+                 data-bs-toggle="modal"
+                 data-bs-target="#edit-stock-transfer"
+                 data-id="<%= t._id %>">
+                <i data-feather="edit" class="feather-edit"></i>
+              </a>
+              <a class="p-2 d-flex align-items-center justify-content-between border rounded"
+                 href="javascript:void(0);"
+                 data-bs-toggle="modal"
+                 data-bs-target="#delete"
+                 data-id="<%= t._id %>">
+                <i data-feather="trash-2" class="feather-trash-2"></i>
+              </a>
+            </div>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+<% } else { %>
+  <div class="alert alert-info text-center mt-3">
+    No transfer records available.
+  </div>
+<% } %>
+
 							</div>
 						</div>
 					</div>
@@ -334,7 +346,7 @@
 				</form>
 			</div>
 		</div>
-	</div>
+		</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
