@@ -216,7 +216,7 @@
 			</div>
 			<!-- Header -->
 
-			<!-- Sidebar -->
+				<!-- Sidebar -->
 			<div class="sidebar" id="sidebar">
 				<!-- Logo -->
 				<div class="sidebar-logo">
@@ -296,8 +296,8 @@
 								<ul>
 									<li><a href="/manageBranch"><i class="ti ti-archive fs-16 me-2"></i><span>Branch</span></a>
 									<li><a href="/manageParkingStore"><i class="ti ti-home-bolt fs-16 me-2"></i><span>Stores</span></a></li>
-									<li><a href="expired-products.html"><i class="ti ti-progress-alert fs-16 me-2"></i><span>Expired Products</span></a></li>
-									<li><a href="low-stocks.html"><i class="ti ti-trending-up-2 fs-16 me-2"></i><span>Low Stocks</span></a></li>
+									<li><a href="/expiredProducts"><i class="ti ti-progress-alert fs-16 me-2"></i><span>Expired Products</span></a></li>
+									<li><a href="/lowStock"><i class="ti ti-trending-up-2 fs-16 me-2"></i><span>Low Stocks</span></a></li>
 									<li><a href="/addCategory"><i class="ti ti-list-details fs-16 me-2"></i><span>Category</span></a></li>
 									<li><a href="/addUnit"><i class="ti ti-brand-unity fs-16 me-2"></i><span>Units</span></a></li>
 								</ul>
@@ -306,8 +306,9 @@
 								<h6 class="submenu-hdr">Stock</h6>
 								<ul>
 									<li><a href="/manageProduct"><i data-feather="box"></i><span>Manage Stock</span></a></li>
-									<li><a href="stock-adjustment.html"><i class="ti ti-stairs-up fs-16 me-2"></i><span>Stock Adjustment</span></a></li>
-									<li><a href="stock-transfer.html"><i class="ti ti-stack-pop fs-16 me-2"></i><span>Stock Transfer</span></a></li>
+									<li><a href="/adjustStock"><i class="ti ti-stairs-up fs-16 me-2"></i><span>Stock Adjustment</span></a></li>
+									<li><a href="/price-adjustments"><i class="ti ti-cards fs-16 me-2"></i><span>Price Adjustment</span></a></li>
+									<li><a href="/stockTransfer"><i class="ti ti-stack-pop fs-16 me-2"></i><span>Stock Transfer</span></a></li>
 								</ul>
 							</li>
 							<li class="submenu-open">
@@ -333,10 +334,16 @@
 							<li class="submenu-open">
 								<h6 class="submenu-hdr">Finance & Accounts</h6>
 								<ul>
-									<li><a href="javascript:void(0);"><i class="ti ti-file-stack fs-16 me-2"></i><span>Expenses</span></a></li>
-									<li><a href="javascript:void(0);"><i class="ti ti-file-pencil fs-16 me-2"></i><span>Supplier Invoice</span></a></li>
-									<li><a href="account-list.html"><i class="ti ti-building-bank fs-16 me-2"></i><span>Transactions</span></a></li>
-									<li><a href="money-transfer.html"><i class="ti ti-moneybag fs-16 me-2"></i><span>Loan</span></a></li>
+									<li class="submenu">
+										<a href="javascript:void(0);"><i class="ti ti-file-stack fs-16 me-2"></i><span>Expenses</span><span class="menu-arrow"></span></a>
+										<ul>
+											<li><a href="/expense">Expenses</a></li>
+											<li><a href="/expense-category">Expense Category</a></li>
+										</ul>
+									</li>									
+									<li><a href="/SuppliersInvoice"><i class="ti ti-file-pencil fs-16 me-2"></i><span>Supplier Invoice</span></a></li>
+									<li><a href="/transactions"><i class="ti ti-building-bank fs-16 me-2"></i><span>Transactions</span></a></li>
+									<li><a href="/manageLoan"><i class="ti ti-moneybag fs-16 me-2"></i><span>Loan</span></a></li>
 
 								</ul>
 							</li>
@@ -349,7 +356,7 @@
 									</li>
 								</ul>
 							</li>
-							<li class="submenu-open">
+							<!-- <li class="submenu-open">
 								<h6 class="submenu-hdr">HRM</h6>
 								<ul>
 									<li><a href="employees-grid.html"><i class="ti ti-user fs-16 me-2"></i><span>Employees</span></a></li>
@@ -381,15 +388,15 @@
 										</ul>
 									</li>
 								</ul>
-							</li>
+							</li> -->
 							<li class="submenu-open">
 								<h6 class="submenu-hdr">Reports</h6>
 								<ul>
 									<li class="submenu">
 										<a href="javascript:void(0);"><i class="ti ti-chart-bar fs-16 me-2"></i><span>Sales Report</span><span class="menu-arrow"></span></a>
 										<ul>
-											<li><a href="sales-report.html">Sales Report</a></li>
-											<li><a href="best-seller.html">Best Seller</a></li>
+											<li><a href="/sales-report">Detailed Sales Report</a></li>
+											<li><a href="/sales-report-summary">Summary Report</a></li>
 										</ul>
 									</li>
 									<li><a href="purchase-report.html"><i class="ti ti-chart-pie-2 fs-16 me-2"></i><span>Purchase report</span></a></li>
@@ -397,7 +404,7 @@
 										<a href="javascript:void(0);"><i class="ti ti-triangle-inverted fs-16 me-2"></i><span>Inventory Report</span><span class="menu-arrow"></span></a>
 										<ul>
 											<li><a href="inventory-report.html">Inventory Report</a></li>
-											<li><a href="stock-history.html">Stock History</a></li>
+											<li><a href="/stock-report">Stock History</a></li>
 											<li><a href="sold-stock.html">Sold Stock</a></li>
 										</ul>
 									</li>
@@ -412,7 +419,7 @@
 									<li class="submenu">
 										<a href="javascript:void(0);"><i class="ti ti-report fs-16 me-2"></i><span>Customer Report</span><span class="menu-arrow"></span></a>
 										<ul>
-											<li><a href="customer-report.html">Customer Report</a></li>
+											<li><a href="/customer-report">Customer Report</a></li>
 											<li><a href="customer-due-report.html">Customer Due Report</a></li>
 										</ul>
 									</li>
@@ -478,17 +485,52 @@
 												<span>Create Sales</span>
 											</div>
 											<div>
-												<% if (negativeSalesActive) { %>
-												<h2 id="negativeSalesBanner" class="text-xl font-semibold italic text-gray-800 mb-4">
+												<h4 id="negativeSalesBanner" class="text-xl font-semibold italic text-gray-800 mb-4" style="display: <%= negativeSalesActive ? 'block' : 'none' %>;">
 													Negative Sales Activated
-												</h2>
-												<% } else { %>
-												<h2 id="negativeSalesBanner" class="hidden text-xl font-semibold italic text-gray-800 mb-4">
-													Negative Sales Activated
-												</h2>
-												<% } %>
+												</h4>
+
 											</div>
 										</div>
+										<script>
+										document.addEventListener("DOMContentLoaded", function () {
+											const toggleBtn = document.getElementById("toggleNegativeSales");
+											const banner = document.getElementById("negativeSalesBanner");
+
+											toggleBtn.addEventListener("click", function () {
+											fetch("/settings/toggle-negative-sales", {
+												method: "POST",
+												headers: {
+												"Content-Type": "application/json"
+												}
+											})
+											.then(response => response.json())
+											.then(data => {
+												if (data.success) {
+												const isActive = data.active;
+
+												// Update button label
+												toggleBtn.textContent = isActive
+													? "Deactivate Negative Sales"
+													: "Activate Negative Sales";
+
+												// Show/hide banner
+												if (isActive) {
+													banner.style.display = "block";
+												} else {
+													banner.style.display = "none";
+												}
+												} else {
+												alert("Failed to toggle setting.");
+												}
+											})
+											.catch(err => {
+												console.error("Toggle error:", err);
+												alert("Something went wrong!");
+											});
+											});
+										});
+										</script>
+
 										<div class="row g-3">
 											<div class="col-md-4">
 												<div class="input-icon-end position-relative">
@@ -502,71 +544,8 @@
 											<div class="col-md-4 position-relative">
 												<input type="text" class="form-control" name="customer_name" id="customerSearch" autocomplete="off" placeholder="Search Customer">
 												<input type="hidden" name="customer_id" id="customerIdField">
-												<div id="customerSuggestions" class="list-group position-absolute w-100" style="z-index: 1000; max-height: 200px; overflow-y: auto; display: none;"></div>
+												<div id="customerSuggestions" class="list-group position-absolute w-100 z-3" style="max-height: 150px; overflow-y: auto;"></div>
 											</div>
-											<script>
-													document.addEventListener('DOMContentLoaded', function () {
-													const searchInput = document.getElementById('customerSearch');
-													const suggestionsContainer = document.getElementById('customerSuggestions');
-													const creditLimitField = document.getElementById('creditLimitDisplay');
-													const balanceField = document.getElementById('balanceDisplay');
-													const customerIdField = document.getElementById('customerIdField');
-
-													let debounceTimer;
-
-													searchInput.addEventListener('input', function () {
-														const query = this.value.trim();
-														clearTimeout(debounceTimer);
-
-														if (query.length === 0) {
-														suggestionsContainer.style.display = 'none';
-														customerIdField.value = ''; // clear ID if input is empty
-														return;
-														}
-
-														debounceTimer = setTimeout(() => {
-														fetch(`/search-customers?q=${encodeURIComponent(query)}`)
-															.then(res => res.json())
-															.then(customers => {
-															suggestionsContainer.innerHTML = '';
-															if (customers.length > 0) {
-																customers.forEach(customer => {
-																const item = document.createElement('button');
-																item.type = 'button';
-																item.className = 'list-group-item list-group-item-action';
-																item.textContent = `${customer.customer_name} (${customer.mobile})`;
-
-																item.addEventListener('click', function () {
-																	selectCustomer(customer);
-																	suggestionsContainer.style.display = 'none';
-																});
-
-																suggestionsContainer.appendChild(item);
-																});
-																suggestionsContainer.style.display = 'block';
-															} else {
-																suggestionsContainer.style.display = 'none';
-															}
-															})
-															.catch(err => {
-															console.error('Error fetching customers:', err);
-															suggestionsContainer.style.display = 'none';
-															});
-														}, 300); // debounce delay
-													});
-
-													function selectCustomer(customer) {
-														searchInput.value = customer.customer_name;
-														creditLimitField.innerHTML = `+₦${formatNumber(customer.credit_limit)}`;
-														balanceField.innerHTML = `-₦${formatNumber(customer.total_debt)}`;
-														customerIdField.value = customer._id;
-													}
-
-													function formatNumber(num) {
-														return Number(num).toLocaleString('en-NG', { minimumFractionDigits: 2 });
-													}
-													});
-											</script>
 											<div class="col-md-4">
 												<select class="select" name="sales_type">
 													<option>Sales Type</option>
@@ -588,7 +567,34 @@
 									<div class="product-added block-section">
 										<div class="d-flex align-items-center justify-content-between gap-3 mb-3">
 											<h5 class="d-flex align-items-center mb-0">Order Details</h5>
-											<div class="badge bg-light text-gray-9 fs-12 fw-semibold py-2 border rounded">Items : <span class="text-teal">3</span></div>
+											<div class="badge bg-light text-gray-9 fs-12 fw-semibold py-2 border rounded">Items : <span class="text-teal" id="itemCount"></span></div>
+											<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const tbody = document.querySelector("tbody");
+  const itemCountSpan = document.getElementById("itemCount");
+
+  function updateItemCount() {
+    const rows = tbody.querySelectorAll("tr.text-sm");
+    const validRows = Array.from(rows).filter(row => {
+      const input = row.querySelector(".productSearch");
+      return input && input.value.trim() !== "";
+    });
+
+    itemCountSpan.textContent = validRows.length;
+  }
+
+  // Attach item count update after new product selection
+  const observer = new MutationObserver(updateItemCount);
+  observer.observe(tbody, { childList: true, subtree: true });
+
+  // Optional: run once on page load
+  updateItemCount();
+
+  // Export if needed in other functions
+  window.updateItemCount = updateItemCount;
+});
+</script>
+
 										</div>
 										<div class="product-wrap">
 											<div class="empty-cart">
@@ -659,11 +665,11 @@
 													</tr>
 													<tr>
 														<td><span class="text-danger">Discount</span></td>
-														<td class="text-end" style="width: 16%;"><input placeholder="Add Discount" name="discount" type="number" class="form-control"></td>
+														<td class="text-end" style="width: 16%;"><input  id="discountInput"  placeholder="Add Discount" name="discount" type="number" class="form-control"></td>
 													</tr>
 													<tr>
 														<td>Grand Total</td>
-														<td class="text-end" style="width: 16%;"><input placeholder="Grand Total" name="grand_total" type="number" class="form-control"></td>
+														<td class="text-end" style="width: 16%;"><input id="grandTotalInput" placeholder="Grand Total" name="grand_total" type="number" class="form-control"></td>
 													</tr>
 												</table>
 											</div>
@@ -938,46 +944,113 @@
 
 
 <script>
-  document.addEventListener("DOMContentLoaded", function () {
-    const toggleBtn = document.getElementById("toggleNegativeSales");
-    const banner = document.getElementById("negativeSalesBanner");
+document.addEventListener("DOMContentLoaded", function () {
+  const input = document.getElementById("customerSearch");
+  const suggestionBox = document.getElementById("customerSuggestions");
+  const customerIdField = document.getElementById("customerIdField");
 
-    if (toggleBtn) {
-      toggleBtn.addEventListener("click", async function () {
-        try {
-          const res = await fetch("/settings/toggle-negative-sales", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Requested-With": "XMLHttpRequest"
+  const creditLimitDisplay = document.getElementById("creditLimitDisplay");
+  const balanceDisplay = document.getElementById("balanceDisplay");
+
+  const subtotalDisplay = document.getElementById("subtotalDisplay");
+  const discountInput = document.getElementById("discountInput");
+  const grandTotalInput = document.getElementById("grandTotalInput");
+  const salesTypeSelect = document.querySelector("select[name='sales_type']");
+
+  let customerBalanceValue = 0;
+  let discount = 0;
+
+  input.addEventListener("input", function () {
+    const query = input.value.trim();
+    if (!query) {
+      suggestionBox.innerHTML = '';
+      return;
+    }
+
+    fetch(`/searchCustomer?q=${encodeURIComponent(query)}`)
+      .then(res => res.json())
+      .then(customers => {
+        suggestionBox.innerHTML = '';
+        if (customers.length === 0) {
+          suggestionBox.innerHTML = '<div class="list-group-item">No matches found</div>';
+          return;
+        }
+
+        customers.forEach(customer => {
+          const div = document.createElement('div');
+          div.className = 'list-group-item list-group-item-action';
+          div.textContent = customer.name;
+
+          div.addEventListener('click', () => {
+            input.value = customer.name;
+            customerIdField.value = customer._id;
+
+            const creditLimit = Number(customer.credit_limit) || 0;
+            customerBalanceValue = Number(customer.remaining_amount) || 0;
+
+            creditLimitDisplay.textContent = `+₦${creditLimit.toLocaleString()}`;
+
+            if (customerBalanceValue < 0) {
+              balanceDisplay.textContent = `-₦${Math.abs(customerBalanceValue).toLocaleString()}`;
+              balanceDisplay.classList.remove('text-primary');
+              balanceDisplay.classList.add('text-danger');
+            } else {
+              balanceDisplay.textContent = `+₦${customerBalanceValue.toLocaleString()}`;
+              balanceDisplay.classList.remove('text-danger');
+              balanceDisplay.classList.add('text-primary');
             }
+
+            suggestionBox.innerHTML = '';
+            updateGrandTotal();
           });
 
-          const result = await res.json();
-
-          if (res.ok && result.success) {
-            const isActive = result.active;
-
-            // Update button text
-            toggleBtn.textContent = isActive ? "Deactivate Negative Sales" : "Activate Negative Sales";
-
-            // Show/hide banner
-            if (isActive) {
-              banner.classList.remove("hidden");
-            } else {
-              banner.classList.add("hidden");
-            }
-          } else {
-            alert("Failed to toggle negative sales.");
-          }
-        } catch (error) {
-          console.error("Error toggling negative sales:", error);
-          alert("Something went wrong.");
-        }
+          suggestionBox.appendChild(div);
+        });
+      })
+      .catch(err => {
+        console.error("Error fetching customers:", err);
+        suggestionBox.innerHTML = '';
       });
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!input.contains(e.target) && !suggestionBox.contains(e.target)) {
+      suggestionBox.innerHTML = '';
     }
   });
+
+  function parseCurrency(str) {
+    return Number(String(str).replace(/[^0-9.-]+/g, '')) || 0;
+  }
+
+  discountInput.addEventListener("input", function () {
+    discount = parseFloat(discountInput.value) || 0;
+    updateGrandTotal();
+  });
+
+  salesTypeSelect.addEventListener("change", updateGrandTotal);
+
+  const observer = new MutationObserver(updateGrandTotal);
+  observer.observe(subtotalDisplay, { childList: true });
+
+  function updateGrandTotal() {
+    const subtotal = parseCurrency(subtotalDisplay.textContent);
+    const salesType = salesTypeSelect.value;
+
+    let grandTotal = subtotal - discount;
+
+    if (salesType !== "credit") {
+      grandTotal += customerBalanceValue;
+    }
+
+    grandTotalInput.value = grandTotal.toFixed(2);
+  }
+});
 </script>
+
+
+
+
 
 		
 		<!-- jQuery -->

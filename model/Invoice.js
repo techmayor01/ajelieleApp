@@ -6,7 +6,7 @@ const invoiceItemSchema = new mongoose.Schema({
     ref: 'Product',
     required: true
   },
-  product_name: String, // Optional if you want to store name directly
+  product_name: String,
   qty: {
     type: Number,
     required: true

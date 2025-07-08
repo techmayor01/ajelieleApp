@@ -3,6 +3,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path')
 const multer = require('multer');
+const numberToWords = require('number-to-words');
 const mongoose = require("mongoose");
 
 
@@ -40,6 +41,7 @@ const upload = multer({
 const User = require("../model/User");
 const Branch = require("../model/Branch");
 const Customer = require("../model/Customer");
+const CustomerLedger = require("../model/CustomerLedger");
 const Supplier = require("../model/Supplier");
 const Loan = require("../model/Loan");
 const Product = require("../model/Product");
@@ -58,6 +60,8 @@ const Expense = require('../model/Expense');
 const ExpenseCategory = require('../model/ExpenseCategory');
 const SupplierInvoice = require('../model/SupplierInvoice');
 const SupplierLedger = require('../model/SupplierLedger');
+const SalesLedger = require('../model/SalesLedger');
+const Invoice = require('../model/Invoice');
 router.use(require("../routes/query"))
 
 
@@ -414,7 +418,7 @@ router.get("/SuppliersInvoice", (req, res) => {
 });
 
 router.post('/addinvoiceSuppliers', (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect('/sign-in');
+  if (!req.isAuthenticated()) return res.redirect('/');
 
   User.findById(req.user._id)
     .then(user => {
@@ -631,6 +635,152 @@ router.post("/addLoaner", async (req, res, next) => {
     next(err); // Pass error to global error handler
   }
 });
+
+
+router.get("/manageLoan", (req, res) => {
+  if (req.isAuthenticated()) {
+    User.findById(req.user._id)
+      .populate("branch")
+      .then(user => {
+        if (!user) return res.redirect("/");
+
+        if (user.role === 'owner') {
+          Branch.findById(user.branch)
+            .then(ownerBranch => {
+              Branch.find()
+                .then(allBranches => {
+                  Loan.find()
+                    .then(loaners => {
+                      res.render("Loan/manageLoan", {
+                        user: user,
+                        ownerBranch: { branch: ownerBranch },
+                        branches: allBranches,
+                        loaners
+                      });
+                    })
+                    .catch(err => {
+                      console.error("Error fetching categories:", err);
+                      res.redirect("/error-404");
+                    });
+                })
+            })
+            .catch(err => {
+              console.error(err);
+              res.redirect('/error-404');
+            });
+        } else {
+         Loan.find()
+         .then(loaners => {
+          res.render("Loan/manageLoan", {
+            user: user,
+            ownerBranch: { branch: user.branch },
+            loaners
+          });
+        })
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        res.redirect("/error-404");
+      });
+  } else {
+    res.redirect("/");
+  }
+});
+
+
+router.get('/searchLoaner', async (req, res) => {
+  const q = req.query.q || '';
+  const branchId = req.user.branch; // adjust if using session/passport
+
+  try {
+    const results = await Loan.find({
+      loaner: { $regex: `^${q}`, $options: 'i' },
+      branch: branchId,
+    })
+    .limit(10)
+    .select('_id loaner mobile address'); // only return needed fields
+
+    // Return only distinct loaners (in case multiple loans exist)
+    const uniqueLoaners = results.reduce((acc, curr) => {
+      if (!acc.some(item => item.loaner === curr.loaner && item.mobile === curr.mobile)) {
+        acc.push(curr);
+      }
+      return acc;
+    }, []);
+
+    res.json(uniqueLoaners);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post("/addLoan", (req, res) => {
+  const { loanerId, loanAmount, loanContractDate, loanContractEndDate, details } = req.body;
+
+  Loan.findById(loanerId)
+    .then(loaner => {
+      if (!loaner) return res.status(404).send("Loaner not found");
+
+      loaner.loans.push({
+        loanAmount,
+        amount_to_repay: loanAmount,
+        loanContractDate,
+        loanContractEndDate,
+        details
+      });
+
+      return loaner.save();
+    })
+    .then(() => {
+      res.redirect("/manageLoan");
+    })
+    .catch(err => {
+      console.error("Error adding loan:", err);
+      res.status(500).send("Server error");
+    });
+});
+
+router.post('/updateLoan/:loanId', async (req, res) => {
+  const { loanId } = req.params;
+  const { loanAmount, loanContractDate, loanContractEndDate, details } = req.body;
+
+  try {
+    const loan = await Loan.findOneAndUpdate(
+      { 'loans._id': loanId },
+      {
+        $set: {
+          'loans.$.loanAmount': loanAmount,
+          'loans.$.loanContractDate': loanContractDate,
+          'loans.$.loanContractEndDate': loanContractEndDate,
+          'loans.$.details': details
+        }
+      }
+    );
+
+    res.redirect('/manageLoan');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Failed to update loan");
+  }
+});
+
+router.delete('/deleteLoan/:loanId', async (req, res) => {
+  const { loanId } = req.params;
+
+  try {
+    await Loan.updateOne(
+      { 'loans._id': loanId },
+      { $pull: { loans: { _id: loanId } } }
+    );
+    res.sendStatus(200);
+  } catch (err) {
+    console.error(err);
+    res.sendStatus(500);
+  }
+});
+
 
 // LOAN ROUTE ENDS HERE 
 
@@ -2338,10 +2488,283 @@ router.post("/settings/toggle-negative-sales", async (req, res) => {
   }
 });
 
-router.post('/addinvoice', (req,res)=>{
-  console.log("Received invoice data:", req.body);
+router.get('/searchCustomer', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.json([]);
+
+  const regex = new RegExp(`^${q}`, 'i');
+
+  try {
+    const customers = await Customer.find({ customer_name: regex }).limit(10);
+    res.json(customers.map(c => ({
+      _id: c._id,
+      name: c.customer_name,
+      credit_limit: c.credit_limit || 0,
+      remaining_amount: c.remaining_amount || 0
+    })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json([]);
+  }
+});
+
+
+// router.post('/addinvoice', (req,res)=>{
+//   console.log("Received invoice data:", req.body);
   
-})
+// })
+
+
+router.post("/addInvoice", async (req, res, next) => {
+  const roundToTwo = num => Math.round((num + Number.EPSILON) * 100) / 100;
+
+  let {
+    customer_id,
+    customer_name,
+    mobile,
+    email,
+    address,
+    credit_limit,
+    payment_date,
+    sales_type,
+    discount = 0,
+    product,
+    qty,
+    unitcode,
+    rate,
+    total,
+    payment_type,
+    grand_total,
+    paid_amount
+  } = req.body;
+
+  if (!Array.isArray(product)) product = [product];
+  if (!Array.isArray(qty)) qty = [qty];
+  if (!Array.isArray(unitcode)) unitcode = [unitcode];
+  if (!Array.isArray(rate)) rate = [rate];
+  if (!Array.isArray(total)) total = [total];
+
+  const len = product.length;
+  if ([qty, unitcode, rate, total].some(arr => arr.length !== len)) {
+    return next({ status: 400, message: 'Product detail arrays must have the same length' });
+  }
+
+  const branchId = req.user.branch;
+  if (!branchId) return next({ status: 400, message: 'Branch ID not found on user' });
+
+  const grandTotalNum = roundToTwo(Number(grand_total));
+  const paidAmountNum = roundToTwo(Number(paid_amount));
+  const remainingAmount = roundToTwo(grandTotalNum - paidAmountNum);
+
+  const items = [];
+  let generatedInvoiceNo, generatedReceiptNo, savedInvoice;
+
+  try {
+    const branch = await Branch.findById(branchId);
+    if (!branch) throw { status: 404, message: 'Branch not found' };
+
+    const prefix = branch.branch_name.toUpperCase().slice(0, 2);
+
+    const invoicePrefix = `INV-${prefix}-`;
+    const latestInvoice = await Invoice.findOne({ invoice_no: { $regex: `^${invoicePrefix}` } }).sort({ createdAt: -1 });
+    const nextInvoiceNum = latestInvoice?.invoice_no?.match(/\d+$/)
+      ? parseInt(latestInvoice.invoice_no.match(/\d+$/)[0]) + 1 : 1;
+    generatedInvoiceNo = `${invoicePrefix}${String(nextInvoiceNum).padStart(3, '0')}`;
+
+    const receiptPrefix = sales_type === 'cash' ? `CH-${prefix}-` : `CR-${prefix}-`;
+    const latestReceipt = await Invoice.findOne({ receipt_no: { $regex: `^${receiptPrefix}` } }).sort({ createdAt: -1 });
+    const nextReceiptNum = latestReceipt?.receipt_no?.match(/\d+$/)
+      ? parseInt(latestReceipt.receipt_no.match(/\d+$/)[0]) + 1 : 1;
+    generatedReceiptNo = `${receiptPrefix}${String(nextReceiptNum).padStart(3, '0')}`;
+
+    const config = await Config.findOne({ key: "negativeSalesActive" });
+    const negativeSalesActive = config?.value === true;
+
+    let customer = customer_id
+      ? await Customer.findById(customer_id)
+      : await Customer.create({
+          customer_name,
+          mobile,
+          email,
+          address,
+          credit_limit,
+          branch: branchId
+        });
+
+    if (!customer) throw { status: 400, message: 'Unable to identify or create customer.' };
+
+    for (let i = 0; i < len; i++) {
+      const productName = product[i];
+      if (!productName?.trim()) continue;
+
+      const soldQtyRaw = Number(qty[i]);
+      const unitCode = unitcode[i];
+      const itemRate = roundToTwo(Number(rate[i]));
+      const itemTotal = roundToTwo(Number(total[i]));
+      const soldQty = Math.round(soldQtyRaw * 2) / 2;
+
+      const productDoc = await Product.findOne({ product: productName, branch: branchId });
+      if (!productDoc) continue;
+
+      const sellingVariant = productDoc.variants.find(v => v.unitCode === unitCode);
+      if (!sellingVariant) continue;
+
+      const baseVariant = productDoc.variants[0];
+      const baseEquivalent = unitCode === baseVariant.unitCode
+        ? soldQty
+        : soldQty * (sellingVariant.totalInBaseUnit || 1);
+
+      if (!negativeSalesActive && sellingVariant.quantity < soldQty) {
+        throw { status: 400, message: `Insufficient stock for ${productName} in ${unitCode}` };
+      }
+
+      sellingVariant.quantity -= soldQty;
+
+      items.push({
+        product: productDoc._id,
+        product_name: productName,
+        qty: soldQty,
+        unitcode: unitCode,
+        rate: itemRate,
+        total: itemTotal
+      });
+
+      await productDoc.save();
+
+      await StockLedger.create({
+        product: productDoc._id,
+        branch: branchId,
+        operator: req.user._id,
+        date: new Date(payment_date),
+        variants: productDoc.variants.map(v => ({
+          unitCode: v.unitCode,
+          stock_in: 0,
+          stock_out: v.unitCode === unitCode ? soldQty : 0,
+          balance: v.quantity
+        }))
+      });
+
+      await SalesLedger.create({
+        product: productDoc._id,
+        product_name: productName,
+        sale_date: new Date(payment_date),
+        unit: unitCode,
+        unit_price: itemRate,
+        quantity_sold: soldQty,
+        amount: itemTotal,
+        customer: customer._id,
+        customer_name: customer.customer_name,
+        receipt_no: generatedReceiptNo,
+        instock_qty: sellingVariant.quantity,
+        branch: branchId,
+        operator: req.user._id
+      });
+    }
+
+    savedInvoice = await Invoice.create({
+      customer_id: customer._id,
+      customer_name: customer.customer_name,
+      mobile,
+      email,
+      address,
+      credit_limit,
+      payment_date,
+      sales_type,
+      discount: Number(discount) || 0,
+      items,
+      payment_type,
+      grand_total: grandTotalNum,
+      paid_amount: paidAmountNum,
+      remaining_amount: remainingAmount,
+      invoice_no: generatedInvoiceNo,
+      receipt_no: generatedReceiptNo,
+      user: req.user._id,
+      branch: branchId,
+      createdBy: req.user._id
+    });
+
+    // Handle sales type and counters
+    let ledgerType;
+    if (sales_type === 'credit') {
+      customer.total_debt = roundToTwo((customer.total_debt || 0) + remainingAmount);
+      customer.remaining_amount = customer.total_debt;
+      customer.sales_type = 'credit';
+      customer.credit_sales_count = (customer.credit_sales_count || 0) + 1;
+      ledgerType = 'credit-sales';
+    } else if (sales_type === 'cash') {
+      customer.sales_type = 'cash';
+      customer.cash_sales_count = (customer.cash_sales_count || 0) + 1;
+      ledgerType = 'paid-sales';
+    }
+
+    await customer.save();
+
+    await CustomerLedger.create({
+      customer: customer._id,
+      branch: branchId,
+      type: ledgerType,
+      refNo: generatedReceiptNo,
+      date: payment_date,
+      amount: grandTotalNum,
+      paid: 0,
+      debtBalance: customer.total_debt || 0,
+      mainBalance: 0 // ✅ DO NOT update mainBalance here
+    });
+
+    res.redirect(`/receipt/${savedInvoice._id}`);
+  } catch (err) {
+    console.error("Error in /addInvoice:", err);
+    next(err);
+  }
+});
+
+router.get('/receipt/:invoiceId', async (req, res, next) => {
+  try {
+    const invoice = await Invoice.findById(req.params.invoiceId)
+      .populate('branch')
+      .populate('createdBy');
+
+    if (!invoice) {
+      return res.status(404).send('Invoice not found');
+    }
+
+    const branch = invoice.branch;
+    const isHeadOffice = branch?.isHeadOffice;
+    const creator = invoice.createdBy;
+
+    const totalInWords = numberToWords.toWords(invoice.grand_total)
+      .replace(/\b\w/g, l => l.toUpperCase());
+
+    let headOffice = null;
+
+    // ✅ Only find head office if current branch is NOT head office
+    if (!isHeadOffice) {
+      headOffice = await Branch.findOne({ isHeadOffice: true });
+    }
+
+    res.render('Sales/receipt', {
+      invoice,
+      branch,
+      creator,
+      isHeadOffice,
+      headOffice,
+      totalInWords
+    });
+
+  } catch (err) {
+    console.error('Error loading receipt:', err);
+    next(err);
+  }
+});
+
+
+
+
+
+
+
+
+
 // SALES ROUTE ENDS HERE ................ TECH MYOR 
 
 
@@ -2842,33 +3265,270 @@ router.post('/deleteExpenseCategory', (req, res) => {
 // EXPENSE ROUTE ENDS HERE ----------------- TECH MAYOR GROUPS
 
 // TRANSACTIONS ROUTE STARTS HERE
-router.get("/transactions", (req, res) => {
+router.get("/transactions", async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  try {
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/");
+
+    const branchId = user.branch._id || user.branch;
+
+    const [ownerBranch, allBranches] = user.role === 'owner'
+      ? await Promise.all([
+          Branch.findById(branchId),
+          Branch.find()
+        ])
+      : [user.branch, null];
+
+    const [customers, loans] = await Promise.all([
+      Customer.find({ branch: branchId }),
+      Loan.find({ branch: branchId }) // fetch all loans for this branch
+    ]);
+
+    res.render("Transaction/transaction", {
+      user,
+      ownerBranch: { branch: ownerBranch },
+      branches: allBranches,
+      customers,
+      loans
+    });
+
+  } catch (err) {
+    console.error("Error in /transactions route:", err);
+    res.redirect("/error-404");
+  }
+});
+
+router.get("/searchClient", async (req, res) => {
+  const { q, type } = req.query;
+  const regex = new RegExp(q, 'i');
+
+  try {
+    if (type.toLowerCase() === 'customer') {
+      const customers = await Customer.find({ customer_name: regex }).limit(10);
+      return res.json(customers.map(c => ({
+        _id: c._id,
+        name: c.customer_name,
+        balance: c.remaining_amount || 0
+      })));
+    } 
+    
+    if (type.toLowerCase() === 'loan') {
+      const loans = await Loan.find({ loaner: regex }).limit(10);
+      return res.json(loans.map(loan => ({
+        _id: loan._id,
+        name: loan.loaner,
+        balance: loan.loans.reduce((sum, l) => sum + l.amount_to_repay, 0)
+      })));
+    }
+
+    res.json([]);
+  } catch (err) {
+    console.error("Error in /searchClient:", err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post("/transactions", async (req, res, next) => {
+  try {
+    const {
+      selectedUserId,
+      selectedUserType,
+      amount,
+      paymentType,
+      date
+    } = req.body;
+
+    const paidAmount = Number(amount);
+    const paymentDate = new Date(date);
+
+    if (!selectedUserId || !selectedUserType || isNaN(paidAmount)) {
+      return res.status(400).json({ error: "Missing or invalid input" });
+    }
+
+    if (selectedUserType === "customer") {
+      const customer = await Customer.findById(selectedUserId).populate("branch");
+      if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+      const branch = customer.branch;
+      const branchCode = branch.branch_name.toUpperCase().slice(0, 2);
+
+      // === Generate Receipt Number ===
+      const receiptPrefix = `PY-${branchCode}-`;
+      const latestLedger = await CustomerLedger.findOne({ refNo: { $regex: `^${receiptPrefix}` } })
+        .sort({ createdAt: -1 });
+
+      const nextNum = latestLedger?.refNo?.match(/\d+$/)
+        ? parseInt(latestLedger.refNo.match(/\d+$/)[0]) + 1
+        : 1;
+
+      const generatedRefNo = `${receiptPrefix}${String(nextNum).padStart(3, "0")}`;
+
+      let debt = customer.total_debt || 0;
+      let remainingDebt = Math.max(0, debt - paidAmount);
+      let excess = paidAmount > debt ? paidAmount - debt : 0;
+
+      // Update customer balances
+      customer.total_debt = remainingDebt;
+      customer.remaining_amount = remainingDebt;
+      await customer.save();
+
+      await CustomerLedger.create({
+        customer: customer._id,
+        branch: customer.branch._id,
+        type: "payment",
+        refNo: generatedRefNo,
+        date: paymentDate,
+        amount: 0,
+        paid: paidAmount,
+        debtBalance: remainingDebt,
+        mainBalance: excess
+      });
+
+      return res.redirect("/transactions?success=1");
+    }
+
+    if (selectedUserType === "loan") {
+      // Placeholder: can be expanded
+      console.log("Loan repayment received:", {
+        loanerId: selectedUserId,
+        amount: paidAmount,
+        date: paymentDate,
+        paymentType
+      });
+
+      return res.redirect("/transactions");
+    }
+
+    res.status(400).json({ error: "Unsupported transaction type" });
+
+  } catch (err) {
+    console.error("Transaction Error:", err);
+    next(err);
+  }
+});
+
+// TRANSACTION ENDS HERE ----------------- TECH MAYOR GROUPS
+
+
+// REPORTS ROUTE STARTS HERE
+router.get("/sales-report", async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  try {
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/");
+
+    const branchId = user.branch._id || user.branch;
+
+    const salesLedgers = await SalesLedger.find({ branch: branchId })
+      .populate("product")
+      .populate("customer")
+      .populate("operator")
+      .sort({ sale_date: -1 });
+
+    // Corrected Totals Logic
+    let totalAmount = 0;
+    let totalCash = 0;
+    let totalCredit = 0;
+
+    salesLedgers.forEach(sale => {
+      const amount = Number(sale.amount) || 0;
+      totalAmount += amount;
+
+      if (sale.sales_type === 'cash') {
+        totalCash += amount;
+      } else {
+        totalCredit += amount;
+      }
+    });
+
+    const renderData = {
+      user,
+      salesLedgers,
+      totalAmount,
+      totalCash,
+      totalCredit,
+    };
+
+    if (user.role === "owner") {
+      const ownerBranch = await Branch.findById(branchId);
+      const allBranches = await Branch.find();
+      renderData.ownerBranch = { branch: ownerBranch };
+      renderData.branches = allBranches;
+    } else {
+      renderData.ownerBranch = { branch: user.branch };
+    }
+
+    res.render("Report/Sales/sales-report", renderData);
+  } catch (err) {
+    console.error("Error loading sales-report:", err);
+    res.redirect("/error-404");
+  }
+});
+
+
+router.get("/sales-report-summary", async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  try {
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/");
+
+    const branchId = user.branch._id || user.branch;
+
+    const salesLedgers = await SalesLedger.find({ branch: branchId })
+      .populate("product")
+      .populate("customer")
+      .populate("operator")
+      .sort({ sale_date: -1 });
+
+    if (user.role === 'owner') {
+      const ownerBranch = await Branch.findById(branchId);
+      const allBranches = await Branch.find();
+
+      return res.render("Report/Sales/summary-report", {
+        user,
+        ownerBranch: { branch: ownerBranch },
+        branches: allBranches,
+        salesLedgers
+      });
+    }
+
+    res.render("Report/Sales/summary-report", {
+      user,
+      ownerBranch: { branch: user.branch },
+      salesLedgers
+    });
+
+  } catch (err) {
+    console.error("Error loading sales-report:", err);
+    res.redirect("/error-404");
+  }
+});
+
+router.get("/sales-report-summaryt", (req, res) => {
   if (req.isAuthenticated()) {
     User.findById(req.user._id)
       .populate("branch")
       .then(user => {
-        if (!user) return res.redirect("/sign-in");
-
-        const branchId = user.branch._id || user.branch;
+        if (!user) return res.redirect("/");
 
         if (user.role === 'owner') {
-          Branch.findById(branchId)
+          Branch.findById(user.branch)
             .then(ownerBranch => {
               Branch.find()
                 .then(allBranches => {
-                  Customer.find({ branch: branchId })
-                    .then(customers => {
-                      res.render("Transaction/transaction", {
-                        user: user,
-                        ownerBranch: { branch: ownerBranch },
-                        branches: allBranches,
-                        customers
-                      });
-                    })
-                    .catch(err => {
-                      console.error("Error fetching customers:", err);
-                      res.redirect("/error-404");
-                    });
+                  res.render("Report/Sales/summary-report", {
+                    user: user,
+                    ownerBranch: { branch: ownerBranch },
+                    branches: allBranches
+                  });
+                })
+                .catch(err => {
+                  console.error(err);
+                  res.redirect('/error-404');
                 });
             })
             .catch(err => {
@@ -2876,14 +3536,10 @@ router.get("/transactions", (req, res) => {
               res.redirect('/error-404');
             });
         } else {
-          Customer.find({ branch: branchId }) 
-            .then(customers => {
-              res.render("Transaction/transaction", {
-                user: user,
-                ownerBranch: { branch: user.branch },
-                customers
-              });
-            });
+          res.render("Report/Sales/summary-report", {
+            user: user,
+            ownerBranch: { branch: user.branch }
+          });
         }
       })
       .catch(err => {
@@ -2891,10 +3547,151 @@ router.get("/transactions", (req, res) => {
         res.redirect("/error-404");
       });
   } else {
-    res.redirect("/sign-in");
+    res.redirect("/");
   }
 });
 
+router.get("/customer-report", (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.redirect("//");
+  }
 
+  const { customerId, startDate, endDate } = req.query;
+  const query = customerId ? { customer: customerId } : null;
+
+  if (startDate && endDate && query) {
+    query.date = {
+      $gte: new Date(startDate),
+      $lte: new Date(endDate),
+    };
+  }
+
+  User.findById(req.user._id)
+    .populate("branch")
+    .then(user => {
+      if (!user) return res.redirect("//");
+
+      const renderView = (ownerBranch, branches = []) => {
+        if (query) {
+          CustomerLedger.find(query)
+            .populate("customer", "customer_name")
+            .populate("branch", "branch_name")
+            .sort({ date: 1 })
+            .then(entries => {
+              res.render("Report/Customer/customer-report", {
+                user,
+                ownerBranch: { branch: ownerBranch },
+                branches,
+                entries,
+                startDate,
+                endDate,
+                customerId,
+              });
+            })
+            .catch(err => {
+              console.error("Ledger Report Error:", err);
+              res.render("Report/Customer/customer-report", {
+                user,
+                ownerBranch: { branch: ownerBranch },
+                branches,
+                entries: [],
+                startDate,
+                endDate,
+                customerId,
+                error: "Error retrieving ledger data",
+              });
+            });
+        } else {
+          res.render("Report/Customer/customer-report", {
+            user,
+            ownerBranch: { branch: ownerBranch },
+            branches,
+            entries: [],
+            startDate,
+            endDate,
+            customerId,
+          });
+        }
+      };
+
+      if (user.role === 'owner') {
+        Branch.findById(user.branch)
+          .then(ownerBranch => {
+            Branch.find()
+              .then(allBranches => renderView(ownerBranch, allBranches))
+              .catch(err => {
+                console.error(err);
+                res.redirect("/error-404");
+              });
+          })
+          .catch(err => {
+            console.error(err);
+            res.redirect("/error-404");
+          });
+      } else {
+        renderView(user.branch);
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      res.redirect("/error-404");
+    });
+});
+
+router.get("/stock-report", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.redirect("/sign-in");
+  }
+
+  try {
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/sign-in");
+
+    const { productId, startDate, endDate } = req.query;
+    const branchId = user.branch._id;
+
+    const stockQuery = {
+      branch: branchId,
+    };
+
+    if (productId) {
+      stockQuery.product = productId;
+    }
+
+    if (startDate || endDate) {
+      stockQuery.date = {};
+      if (startDate) stockQuery.date.$gte = new Date(startDate);
+      if (endDate) stockQuery.date.$lte = new Date(endDate);
+    }
+
+    const stockLedgers = await StockLedger.find(stockQuery)
+      .populate("product")
+      .populate("branch", "branch_name")
+      .populate("operator", "fullname")
+      .sort({ date: 1 });
+
+    if (user.role === 'owner') {
+      const ownerBranch = await Branch.findById(branchId);
+      const allBranches = await Branch.find();
+
+      return res.render("Report/Stock/stock-report", {
+        user,
+        ownerBranch: { branch: ownerBranch },
+        branches: allBranches,
+         stockLedgers: productId ? stockLedgers : undefined
+      });
+    }
+
+    res.render("Report/Stock/stock-report", {
+      user,
+      ownerBranch: { branch: user.branch },
+       stockLedgers: productId ? stockLedgers : undefined
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.redirect("/error-404");
+  }
+});
 
 module.exports = router;
