@@ -13,7 +13,11 @@ const supplierLedgerSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['debit', 'credit'],
+    enum: ['credit', 'debit'],
+    required: true
+  },
+  refNo: {
+    type: String,
     required: true
   },
   date: {
@@ -24,14 +28,14 @@ const supplierLedgerSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  balance: {
+  paid: {
     type: Number,
     default: 0
   },
-  reason: {
-    type: String,
-    required: true
-  },
+  Balance: {
+    type: Number,
+    default: 0
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model('SupplierLedger', supplierLedgerSchema);

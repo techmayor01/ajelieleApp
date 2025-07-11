@@ -32,11 +32,7 @@ const customerLedgerSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  debtBalance: {
-    type: Number,
-    default: 0
-  },
-  mainBalance: {
+  Balance: {
     type: Number,
     default: 0
   }

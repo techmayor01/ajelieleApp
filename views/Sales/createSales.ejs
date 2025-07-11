@@ -606,37 +606,52 @@ document.addEventListener("DOMContentLoaded", function () {
 											<div class="product-list border-0 p-0">
 												<div class="table-responsive">
 													<table class="table table-borderless">
-														<thead>
-															<tr>
-																<th class="bg-transparent fw-bold">Search Product</th>
-																<th class="bg-transparent fw-bold">InStock</th>
-																<th class="bg-transparent fw-bold">QTY</th>
-																<th class="bg-transparent fw-bold">Unit Code</th>
-																<th class="bg-transparent fw-bold">Price</th>
-																<th class="bg-transparent fw-bold">Sub Total</th>
-																<th class="bg-transparent fw-bold">Action</th>
-																<th class="bg-transparent fw-bold text-end"></th>
-															</tr>
-														</thead>
-														<tbody>
-															<tr class="text-sm">
-																<td>
-																	<input class="form-control productSearch" autocomplete="off" type="text" name="product" placeholder="product">
-																	<ul class="productSuggestions absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded shadow text-sm max-h-60 overflow-y-auto d-none" style="min-height: 100px;"></ul>
-																</td>
-																<td><input type="number" value="0" class="form-control" readonly /></td>
-																<td><input name="qty" type="number" class="form-control"></td>
-																<td><select style="border: 1px solid #ced4da; padding: 0.375rem 0.75rem;font-size: 1rem;border-radius: 0.375rem;" name="unitcode"></select></td>
-																<td><input class="form-control" type="number" name="rate" placeholder="Rate" readonly></td>
-																<td><input class="form-control" name="total" type="text" placeholder="Total" readonly></td>
-																<td class="text-end">
-																	<button class="btn-icon delete-icon"  style="background-color: transparent; border: none;">
-																		<i class="ti ti-trash"></i>
-																	</button>
-																</td>
-															</tr>
-														</tbody>
-													</table>
+  <thead>
+    <tr>
+      <th class="bg-transparent fw-bold">Search Product</th>
+      <th class="bg-transparent fw-bold">InStock</th>
+      <th class="bg-transparent fw-bold">QTY</th>
+      <th class="bg-transparent fw-bold">Unit Code</th>
+      <th class="bg-transparent fw-bold">Price</th>
+      <th class="bg-transparent fw-bold">Sub Total</th>
+      <th class="bg-transparent fw-bold text-center">Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- First visible row -->
+    <tr class="text-sm product-row">
+      <td>
+        <input class="form-control productSearch" autocomplete="off" type="text" name="product" placeholder="product">
+        <ul class="productSuggestions absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded shadow text-sm max-h-60 overflow-y-auto d-none" style="min-height: 100px;"></ul>
+      </td>
+      <td><input type="number" value="0" class="form-control" readonly></td>
+      <td><input name="qty" type="number" class="form-control"></td>
+      <td><select name="unitcode" class="form-control"></select></td>
+      <td><input name="rate" type="number" value="0.00" class="form-control" readonly></td>
+      <td><input name="total" type="text" value="0.00" class="form-control bg-gray-100" readonly></td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-danger delete-btn">Delete</button>
+      </td>
+    </tr>
+
+    <!-- Hidden template row -->
+    <tr class="text-sm product-row d-none" id="productRowTemplate">
+      <td>
+        <input class="form-control productSearch" autocomplete="off" type="text" name="product" placeholder="product">
+        <ul class="productSuggestions absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded shadow text-sm max-h-60 overflow-y-auto d-none" style="min-height: 100px;"></ul>
+      </td>
+      <td><input type="number" value="0" class="form-control" readonly></td>
+      <td><input name="qty" type="number" class="form-control"></td>
+      <td><select name="unitcode" class="form-control"></select></td>
+      <td><input name="rate" type="number" value="0.00" class="form-control" readonly></td>
+      <td><input name="total" type="text" value="0.00" class="form-control bg-gray-100" readonly></td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-danger delete-btn">Delete</button>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
 												</div>
 											</div>										
 										</div>
@@ -752,195 +767,173 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
 <script>
-  	document.addEventListener('DOMContentLoaded', function () {
-    const tbody = document.querySelector("tbody");
+document.addEventListener('DOMContentLoaded', function () {
+  const tbody = document.querySelector("tbody");
+  const template = document.getElementById("productRowTemplate");
 
-    function attachProductEvents(row) {
-      const productInput = row.querySelector(".productSearch");
-      const productSuggestions = productInput.nextElementSibling;
-      const unitCodeSelect = row.querySelector("td:nth-child(4) select");
-      const quantityInput = row.querySelector("td:nth-child(3) input");
-      const rateInput = row.querySelector("td:nth-child(5) input");
-      const totalInput = row.querySelector("td:nth-child(6) input");
+  const discountInput = document.getElementById("discountInput");
+  const paidAmountInput = document.querySelector("input[name='paid_amount']");
+  const grandTotalInput = document.getElementById("grandTotalInput");
+  const salesTypeSelect = document.querySelector("select[name='sales_type']");
 
-      let selectedProduct = null;
+  const subtotalDisplay = document.getElementById("subtotalDisplay");
+  const creditLimitDisplay = document.getElementById("creditLimitDisplay");
 
-      productInput.addEventListener("input", async function () {
-        const query = this.value.trim();
-        if (query.length < 2) {
-          productSuggestions.classList.add("d-none");
-          return;
-        }
+  // fixed credit limit only
+  const customerCreditLimit = 0;
+  creditLimitDisplay.textContent = `+₦${customerCreditLimit.toFixed(2)}`;
 
-        try {
-          const res = await fetch(`/search-products?q=${query}`);
-          const products = await res.json();
+  function attachProductEvents(row) {
+    const productInput = row.querySelector(".productSearch");
+    const productSuggestions = row.querySelector(".productSuggestions");
+    const unitSelect = row.querySelector("select[name='unitcode']");
+    const qtyInput = row.querySelector("input[name='qty']");
+    const rateInput = row.querySelector("input[name='rate']");
+    const totalInput = row.querySelector("input[name='total']");
+    let selectedProduct = null;
 
-          productSuggestions.innerHTML = "";
-          products.forEach((product) => {
-            const li = document.createElement("li");
-            li.textContent = `${product.product} (${product.available_qty ?? 0} available)`;
-            li.className = "p-2 hover:bg-gray-100 cursor-pointer";
-            li.addEventListener("click", () => {
-              productInput.value = product.product;
-              selectedProduct = product;
+    productInput.addEventListener("input", async () => {
+      const query = productInput.value.trim();
+      if (query.length < 2) {
+        productSuggestions.classList.add("d-none");
+        return;
+      }
+      try {
+        const res = await fetch(`/search-products?q=${query}`);
+        const products = await res.json();
+        productSuggestions.innerHTML = "";
+        products.forEach(product => {
+          const li = document.createElement("li");
+          li.className = "p-2 hover:bg-gray-100 cursor-pointer";
+          li.textContent = `${product.product} (${product.available_qty ?? 0} available)`;
+          li.addEventListener("click", () => {
+            productInput.value = product.product;
+            selectedProduct = product;
 
-              const firstVariant = product.variants[0];
-              const availableQty = firstVariant?.quantity ?? 0;
-              const initialUnitCode = firstVariant?.unitCode || "";
-              const initialRate = firstVariant?.sellPrice || 0;
+            const firstVariant = product.variants[0] || {};
+            row.querySelector("td:nth-child(2) input").value = firstVariant.quantity ?? 0;
+            rateInput.value = firstVariant.sellPrice ?? 0;
 
-              row.querySelector("td:nth-child(2) input").value = availableQty;
-
-              unitCodeSelect.innerHTML = "";
-              product.variants.forEach(variant => {
-                const option = document.createElement("option");
-                option.value = variant.unitCode;
-                option.textContent = variant.unitCode;
-                unitCodeSelect.appendChild(option);
-              });
-
-              unitCodeSelect.value = initialUnitCode;
-              rateInput.value = initialRate;
-              totalInput.value = (initialRate * 1).toFixed(2);
-
-              productSuggestions.classList.add("d-none");
-              updateGrandTotal();
+            unitSelect.innerHTML = "";
+            product.variants.forEach(variant => {
+              const option = document.createElement("option");
+              option.value = variant.unitCode;
+              option.textContent = variant.unitCode;
+              unitSelect.appendChild(option);
             });
-            productSuggestions.appendChild(li);
+
+            totalInput.value = ((parseFloat(rateInput.value) || 0) * (parseFloat(qtyInput.value) || 1)).toFixed(2);
+            productSuggestions.classList.add("d-none");
+            updateTotals();
+
+            maybeAddNewRow(row);
           });
-
-          productSuggestions.classList.remove("d-none");
-        } catch (err) {
-          console.error("Fetch error:", err);
-        }
-
-        const rows = tbody.querySelectorAll("tr.text-sm:not(:has(td[colspan]))");
-        if (row === rows[rows.length - 1]) {
-          addNewRow();
-        }
-      });
-
-      unitCodeSelect.addEventListener("change", () => {
-        if (selectedProduct && unitCodeSelect.value) {
-          const variant = selectedProduct.variants.find(v => v.unitCode === unitCodeSelect.value);
-          if (variant) {
-            rateInput.value = variant.sellPrice;
-            row.querySelector("td:nth-child(2) input").value = variant.quantity ?? 0;
-            updateTotal();
-          }
-        }
-      });
-
-      quantityInput.addEventListener("input", updateTotal);
-
-      function updateTotal() {
-        const quantity = parseFloat(quantityInput.value) || 0;
-        const rate = parseFloat(rateInput.value) || 0;
-        totalInput.value = (quantity * rate).toFixed(2);
-        updateGrandTotal();
-      }
-
-      document.addEventListener("click", (e) => {
-        if (!productInput.contains(e.target) && !productSuggestions.contains(e.target)) {
-          productSuggestions.classList.add("d-none");
-        }
-      });
-    }
-
-    function bindRowEvents(row) {
-      attachProductEvents(row);
-
-      const deleteBtn = row.querySelector("button");
-      const productInput = row.querySelector(".productSearch");
-
-      if (productInput) {
-        productInput.addEventListener("input", () => {
-          const rows = tbody.querySelectorAll("tr.text-sm:not(:has(td[colspan]))");
-          if (row === rows[rows.length - 1]) {
-            addNewRow();
-          }
+          productSuggestions.appendChild(li);
         });
+        productSuggestions.classList.remove("d-none");
+      } catch (e) {
+        console.error(e);
       }
+    });
 
-      if (deleteBtn) {
-        deleteBtn.addEventListener("click", (e) => {
-          e.preventDefault();
-          const rows = tbody.querySelectorAll("tr.text-sm:not(:has(td[colspan]))");
-          if (rows.length > 1) row.remove();
-          updateGrandTotal();
-        });
+    qtyInput.addEventListener("input", () => {
+      updateRowTotal(row);
+      maybeAddNewRow(row);
+    });
+
+    unitSelect.addEventListener("change", () => {
+      if (selectedProduct) {
+        const variant = selectedProduct.variants.find(v => v.unitCode === unitSelect.value);
+        if (variant) {
+          rateInput.value = variant.sellPrice;
+          row.querySelector("td:nth-child(2) input").value = variant.quantity ?? 0;
+          updateRowTotal(row);
+        }
       }
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!productInput.contains(e.target) && !productSuggestions.contains(e.target)) {
+        productSuggestions.classList.add("d-none");
+      }
+    });
+  }
+
+  function updateRowTotal(row) {
+    const qty = parseFloat(row.querySelector("input[name='qty']").value) || 0;
+    const rate = parseFloat(row.querySelector("input[name='rate']").value) || 0;
+    row.querySelector("input[name='total']").value = (qty * rate).toFixed(2);
+    updateTotals();
+  }
+
+  function bindRowEvents(row) {
+    attachProductEvents(row);
+    row.querySelector(".delete-btn")?.addEventListener("click", () => {
+      const allRows = tbody.querySelectorAll(".product-row:not(.d-none)");
+      if (allRows.length > 1) {
+        row.remove();
+        updateTotals();
+      }
+    });
+  }
+
+  function addNewRow() {
+    const newRow = template.cloneNode(true);
+    newRow.id = "";
+    newRow.classList.remove("d-none");
+    newRow.querySelectorAll("input").forEach(input => {
+      input.value = input.readOnly ? "0" : "";
+    });
+    newRow.querySelector("select").innerHTML = "<option value=''>Select Unit</option>";
+    newRow.querySelector(".productSuggestions").innerHTML = "";
+    newRow.querySelector(".productSuggestions").classList.add("d-none");
+    bindRowEvents(newRow);
+    tbody.appendChild(newRow);
+  }
+
+  function maybeAddNewRow(currentRow) {
+    const allRows = tbody.querySelectorAll(".product-row:not(.d-none)");
+    if (currentRow === allRows[allRows.length - 1]) {
+      addNewRow();
+    }
+  }
+
+  function updateTotals() {
+    let subtotal = 0;
+    tbody.querySelectorAll(".product-row:not(.d-none)").forEach(row => {
+      subtotal += parseFloat(row.querySelector("input[name='total']").value) || 0;
+    });
+
+    const discount = parseFloat(discountInput?.value) || 0;
+    const salesType = salesTypeSelect?.value || "cash";
+    let grandTotal = subtotal - discount;
+
+    if (salesType === "cash") {
+      paidAmountInput.value = grandTotal.toFixed(2);
+      paidAmountInput.setAttribute("readonly", true);
+    } else {
+      paidAmountInput.removeAttribute("readonly");
     }
 
-    function addNewRow() {
-      const firstRow = tbody.querySelector("tr.text-sm:not(:has(td[colspan]))");
-      const newRow = firstRow.cloneNode(true);
+    subtotalDisplay.textContent = `₦${subtotal.toFixed(2)}`;
+    grandTotalInput.value = grandTotal.toFixed(2);
+    creditLimitDisplay.textContent = `+₦${customerCreditLimit.toFixed(2)}`;
+  }
 
-      newRow.querySelectorAll("input").forEach(input => {
-        if (input.type === "number") input.value = input.readOnly ? "0" : "";
-        if (input.type === "text") input.value = "";
-      });
+  discountInput?.addEventListener("input", updateTotals);
+  paidAmountInput?.addEventListener("input", updateTotals);
+  salesTypeSelect?.addEventListener("change", updateTotals);
 
-      newRow.querySelector("select").innerHTML = "<option value=''>Select Unit</option>";
-      newRow.querySelector(".productSuggestions").innerHTML = "";
-      newRow.querySelector(".productSuggestions").classList.add("hidden");
+  const firstRow = tbody.querySelector(".product-row:not(.d-none)");
+  if (firstRow) bindRowEvents(firstRow);
 
-      bindRowEvents(newRow);
-      tbody.insertBefore(newRow, tbody.querySelector("tr:nth-last-child(3)"));
-    }
-
-    function updateGrandTotal() {
-      let subtotal = 0;
-
-      document.querySelectorAll("tr.text-sm").forEach(row => {
-        const totalInput = row.querySelector("td:nth-child(6) input");
-        if (totalInput) subtotal += parseFloat(totalInput.value) || 0;
-
-	});
-	
-
-      const discountInput = document.querySelector("input[name='discount']");
-      const discount = parseFloat(discountInput?.value) || 0;
-
-      const remainingText = document.getElementById("remainingAmount")?.innerText || "0";
-      const remainingAmount = parseFloat(remainingText.replace(/[^\d.-]/g, "")) || 0;
-
-      const finalTotal = subtotal - discount + remainingAmount;
-
-      const grandTotalInput = document.querySelector("input[name='grand_total']");
-      if (grandTotalInput) grandTotalInput.value = finalTotal.toFixed(2);
-
-      const salesType = document.querySelector("select[name='sales_type']")?.value;
-      const paidAmountInput = document.querySelector("input[name='paid_amount']");
-
-      if (salesType === "cash") {
-        paidAmountInput.value = finalTotal.toFixed(2);
-        paidAmountInput.setAttribute("readonly", true);
-        document.getElementById("balanceDisplay").textContent = "0.00";
-      } else {
-        paidAmountInput.removeAttribute("readonly");
-        const paid = parseFloat(paidAmountInput.value) || 0;
-        const balance = finalTotal - paid;
-        document.getElementById("balanceDisplay").textContent = balance.toFixed(2);
-      }
-
-      document.getElementById("subtotalDisplay").textContent = subtotal.toFixed(2);
-      document.getElementById("discountDisplay").textContent = discount.toFixed(2);
-      document.getElementById("balanceDisplay").textContent = (finalTotal - parseFloat(paidAmountInput.value || 0)).toFixed(2);
-      document.getElementById("finalTotalDisplay").textContent = finalTotal.toFixed(2);
-    }
-
-    document.querySelector("input[name='discount']")?.addEventListener("input", updateGrandTotal);
-    document.querySelector("input[name='paid_amount']")?.addEventListener("input", updateGrandTotal);
-    document.querySelector("select[name='sales_type']")?.addEventListener("change", updateGrandTotal);
-
-    const firstRow = tbody.querySelector("tr.text-sm:not(:has(td[colspan]))");
-    bindRowEvents(firstRow);
-
-    updateGrandTotal();
-  });
+  updateTotals();
+});
 </script>
+
+
+
+
 
 
 <script>
@@ -952,13 +945,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const creditLimitDisplay = document.getElementById("creditLimitDisplay");
   const balanceDisplay = document.getElementById("balanceDisplay");
 
-  const subtotalDisplay = document.getElementById("subtotalDisplay");
-  const discountInput = document.getElementById("discountInput");
-  const grandTotalInput = document.getElementById("grandTotalInput");
-  const salesTypeSelect = document.querySelector("select[name='sales_type']");
-
   let customerBalanceValue = 0;
-  let discount = 0;
 
   input.addEventListener("input", function () {
     const query = input.value.trim();
@@ -1001,7 +988,6 @@ document.addEventListener("DOMContentLoaded", function () {
             }
 
             suggestionBox.innerHTML = '';
-            updateGrandTotal();
           });
 
           suggestionBox.appendChild(div);
@@ -1018,35 +1004,9 @@ document.addEventListener("DOMContentLoaded", function () {
       suggestionBox.innerHTML = '';
     }
   });
-
-  function parseCurrency(str) {
-    return Number(String(str).replace(/[^0-9.-]+/g, '')) || 0;
-  }
-
-  discountInput.addEventListener("input", function () {
-    discount = parseFloat(discountInput.value) || 0;
-    updateGrandTotal();
-  });
-
-  salesTypeSelect.addEventListener("change", updateGrandTotal);
-
-  const observer = new MutationObserver(updateGrandTotal);
-  observer.observe(subtotalDisplay, { childList: true });
-
-  function updateGrandTotal() {
-    const subtotal = parseCurrency(subtotalDisplay.textContent);
-    const salesType = salesTypeSelect.value;
-
-    let grandTotal = subtotal - discount;
-
-    if (salesType !== "credit") {
-      grandTotal += customerBalanceValue;
-    }
-
-    grandTotalInput.value = grandTotal.toFixed(2);
-  }
 });
 </script>
+
 
 
 

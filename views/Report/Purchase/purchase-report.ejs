@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+		<!-- Meta Tags -->
+		<meta charset="utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<meta name="description" content="Dreams POS is a powerful Bootstrap based Inventory Management Admin Template designed for businesses, offering seamless invoicing, project tracking, and estimates.">
+		<meta name="keywords" content="inventory management, admin dashboard, bootstrap template, invoicing, estimates, business management, responsive admin, POS system">
+		<meta name="author" content="Dreams Technologies">
+		<meta name="robots" content="index, follow">
+		<title>AJELIELE - Purchase Report</title>
+		
+
+		<!-- Favicon -->
+        <link rel="shortcut icon" type="image/x-icon" href="assets/img/favicon.png">
+
+		<!-- Apple Touch Icon -->
+		<link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
+		
+		<!-- Bootstrap CSS -->
+        <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+		
+		<!-- animation CSS -->
+        <link rel="stylesheet" href="assets/css/animate.css">
+
+		<!-- Select2 CSS -->
+		<link rel="stylesheet" href="assets/plugins/select2/css/select2.min.css">
+
+		<!-- Datatable CSS -->
+		<link rel="stylesheet" href="assets/css/dataTables.bootstrap5.min.css">
+
+		<!-- Datetimepicker CSS -->
+		<link rel="stylesheet" href="assets/css/bootstrap-datetimepicker.min.css">
+
+		<!-- Daterangepikcer CSS -->
+		<link rel="stylesheet" href="assets/plugins/daterangepicker/daterangepicker.css">
+
+		<!-- Summernote CSS -->
+	    <link rel="stylesheet" href="assets/plugins/summernote/summernote-bs4.min.css">
+		
+        <!-- Fontawesome CSS -->
+		<link rel="stylesheet" href="assets/plugins/fontawesome/css/fontawesome.min.css">
+		<link rel="stylesheet" href="assets/plugins/fontawesome/css/all.min.css">
+
+		<!-- Tabler Icon CSS -->
+		<link rel="stylesheet" href="assets/plugins/tabler-icons/tabler-icons.min.css">
+		
+		<!-- Color Picker Css -->
+	<link rel="stylesheet" href="assets/plugins/%40simonwep/pickr/themes/nano.min.css">
+
+	    <!-- Main CSS -->
+        <link rel="stylesheet" href="assets/css/style.css">
+		
+    </head>
+    <body>
+		
+		<div id="global-loader" >
+			<div class="whirly-loader"> </div>
+		</div>
+	
+		 
+		<!-- Main Wrapper -->
+        <div class="main-wrapper">
+			<%- include('../../Partials/header') %>
+
+			<div class="page-wrapper">
+				<div class="content">
+					<div>
+						<div class="page-header">
+							<div class="add-item d-flex">
+								<div class="page-title">
+									<h4>Purchase report</h4>
+									<h6>Manage your Purchase report</h6>
+								</div>
+							</div>
+							<ul class="table-top-head">
+								<li class="me-2">
+									<a data-bs-toggle="tooltip" data-bs-placement="top" title="Refresh"><i class="ti ti-refresh"></i></a>
+								</li>
+								<li>
+									<a data-bs-toggle="tooltip" data-bs-placement="top" title="Collapse" id="collapse-header"><i class="ti ti-chevron-up"></i></a>
+								</li>
+							</ul>
+						</div>
+						<div class="card">
+						<form action="/purchase-report" method="get">
+							<input type="hidden" name="supplierID" id="supplierID" value="<%= filters?.supplierID || '' %>" />
+							<div class="card-header d-flex align-items-center flex-wrap gap-4">
+							<div class="search position-relative">
+								<div class="input-icon-start position-relative">
+								<input type="text" autocomplete="off" id="supplierSearch"
+										class="form-control" name="supplier"
+										value="<%= filters?.supplier || '' %>"
+										placeholder="Search by Supplier Name">
+								<span class="input-icon-left">
+									<i class="ti ti-search"></i>
+								</span>
+								</div>
+								<ul id="supplierDropdown" class="list-group position-absolute w-100"
+									style="z-index: 1000; display: none; max-height: 200px; overflow-y: auto;"></ul>
+							</div>
+							<div>
+								<div style="display: flex; align-items: center; gap: 5px;">
+								<input type="date" name="startDate" id="startDate" class="form-control"
+										value="<%= filters?.startDate || '' %>"/>
+								<span class="text-gray-500">to</span>
+								<input type="date" name="endDate" id="endDate" class="form-control"
+										value="<%= filters?.endDate || '' %>"/>
+								</div>
+							</div>
+							<div class="col-lg-2">
+								<div>
+								<button class="btn btn-primary w-100" type="submit">Generate Report</button>
+								</div>
+							</div>
+							</div>
+						</form>
+
+						<script>
+						document.addEventListener('DOMContentLoaded', function () {
+							const supplierInput = document.getElementById('supplierSearch');
+							const supplierIDInput = document.getElementById('supplierID');
+							const dropdown = document.getElementById('supplierDropdown');
+
+							supplierInput.addEventListener('input', async function () {
+							const query = this.value.trim();
+							if (!query) {
+								dropdown.style.display = 'none';
+								dropdown.innerHTML = '';
+								return;
+							}
+							try {
+								const res = await fetch(`/api/suppliers/search?q=${encodeURIComponent(query)}`);
+								const suppliers = await res.json();
+
+								dropdown.innerHTML = '';
+								if (suppliers.length === 0) {
+								dropdown.style.display = 'none';
+								return;
+								}
+
+								suppliers.forEach(supplier => {
+								const li = document.createElement('li');
+								li.textContent = supplier.supplier;
+								li.className = 'list-group-item list-group-item-action';
+								li.addEventListener('click', () => {
+									supplierInput.value = supplier.supplier;
+									supplierIDInput.value = supplier._id;
+									dropdown.style.display = 'none';
+								});
+								dropdown.appendChild(li);
+								});
+
+								dropdown.style.display = 'block';
+							} catch (err) {
+								console.error('Error fetching suppliers:', err);
+							}
+							});
+
+							document.addEventListener('click', (e) => {
+							if (!dropdown.contains(e.target) && e.target !== supplierInput) {
+								dropdown.style.display = 'none';
+							}
+							});
+						});
+						</script>
+						</div>
+
+
+						<!-- /product list -->
+						<div class="card no-search">
+							<div class="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
+								<div>
+									<h4>Purchase Report</h4>
+								</div>
+								<ul class="table-top-head">
+									<li class="me-2">
+										<a data-bs-toggle="tooltip" data-bs-placement="top" title="Pdf"><img src="assets/img/icons/pdf.svg" alt="img"></a>
+									</li>
+									<li class="me-2">
+										<a data-bs-toggle="tooltip" data-bs-placement="top" title="Excel"><img src="assets/img/icons/excel.svg" alt="img"></a>
+									</li>
+									<li>
+										<a data-bs-toggle="tooltip" data-bs-placement="top" title="Print"><i class="ti ti-printer"></i></a>
+									</li>
+								</ul>
+							</div>
+							<% if (purchaseReports && purchaseReports.length > 0) { %>
+							<div class="card-body p-0">
+								<div class="table-responsive">
+								<table class="table datatable">
+									<thead class="thead-light">
+									<tr>
+										<th>Date</th>
+										<th>Product Name</th>
+										<th>Transaction ID</th>
+										<th>Purchase Qty</th>
+									</tr>
+									</thead>
+									<tbody>
+									<% purchaseReports.forEach(report => { %>
+										<% report.items.forEach(item => { %>
+										<tr>
+											<td><%= new Date(report.payment_date).toLocaleDateString() %></td>
+											<td><%= item.item_name || item.product?.product_name || '-' %></td>
+											<td><%= report.invoice_number || report.transaction_id || '-' %></td>
+											<td><%= item.item_qty || 0 %></td>
+										</tr>
+										<% }) %>
+									<% }); %>
+									</tbody>
+								</table>
+								</div>
+							</div>
+							<% } else if (filters?.startDate || filters?.endDate || filters?.supplier) { %>
+							<div class="alert alert-warning text-center mt-3">No purchase records found for your search.</div>
+							<% } %>
+
+						</div>
+						<!-- /product list -->
+					</div>
+				</div>
+				<div class="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
+					<p class="mb-0">2025 &copy; AJELIELE. All Right Reserved</p>
+					<p>Developed by <a href="javascript:void(0);" class="text-orange">Tech Mayor Groups</a></p>
+				</div>
+			</div>
+        </div>
+		<!-- /Main Wrapper -->
+
+		<!-- jQuery -->
+        <script src="assets/js/jquery-3.7.1.min.js" type="add1b16cb320654f94122392-text/javascript"></script>
+
+        <!-- Feather Icon JS -->
+		<script src="assets/js/feather.min.js" type="add1b16cb320654f94122392-text/javascript"></script>
+
+		<!-- Slimscroll JS -->
+		<script src="assets/js/jquery.slimscroll.min.js" type="add1b16cb320654f94122392-text/javascript"></script>
+
+		<!-- Datatable JS -->
+		<script src="assets/js/jquery.dataTables.min.js" type="add1b16cb320654f94122392-text/javascript"></script>
+		<script src="assets/js/dataTables.bootstrap5.min.js" type="add1b16cb320654f94122392-text/javascript"></script>
+
+		<!-- Datetimepicker JS -->
+		<script src="assets/js/moment.min.js" type="add1b16cb320654f94122392-text/javascript"></script>
+		<script src="assets/js/bootstrap-datetimepicker.min.js" type="add1b16cb320654f94122392-text/javascript"></script>
+		<script src="assets/plugins/daterangepicker/daterangepicker.js" type="add1b16cb320654f94122392-text/javascript"></script>
+		
+		<!-- Bootstrap Core JS -->
+        <script src="assets/js/bootstrap.bundle.min.js" type="add1b16cb320654f94122392-text/javascript"></script>
+
+		<!-- Summernote JS -->
+	    <script src="assets/plugins/summernote/summernote-bs4.min.js" type="add1b16cb320654f94122392-text/javascript"></script>
+
+		<!-- Select2 JS -->
+		<script src="assets/plugins/select2/js/select2.min.js" type="add1b16cb320654f94122392-text/javascript"></script>
+
+		<!-- Color Picker JS -->
+		<script src="assets/plugins/%40simonwep/pickr/pickr.es5.min.js" type="add1b16cb320654f94122392-text/javascript"></script>
+
+		<!-- Custom JS -->
+		<script src="assets/js/theme-colorpicker.js" type="add1b16cb320654f94122392-text/javascript"></script>
+		<script src="assets/js/script.js" type="add1b16cb320654f94122392-text/javascript"></script>
+		
+	
+    <script src="../../cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="add1b16cb320654f94122392-|49" defer></script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"951ebb52a8e5d7e3","version":"2025.6.2","serverTiming":{"name":{"cfExtPri":true,"cfEdge":true,"cfOrigin":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}},"token":"3ca157e612a14eccbb30cf6db6691c29","b":1}' crossorigin="anonymous"></script>
+</body>
+
+<!-- Mirrored from dreamspos.dreamstechnologies.com/html/template/purchase-report.html by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 19 Jun 2025 00:00:56 GMT -->
+</html>

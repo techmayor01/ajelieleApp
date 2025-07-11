@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-const variantLedgerSchema = new Schema({
+const parkingVariantLedgerSchema = new Schema({
   unitCode: {
     type: String,
     required: true
@@ -17,20 +17,17 @@ const variantLedgerSchema = new Schema({
   balance: {
     type: Number,
     required: true
-  },
-  cost_price: {
-    type: Number,
-    default: 0
-  },
-  total_sales: {
-    type: Number,
-    default: 0
   }
 }, { _id: false });
 
-const stockLedgerSchema = new Schema({
+const parkingStockLedgerSchema = new Schema({
   date: {
     type: Date,
+    default: Date.now
+  },
+  parkingStore: {
+    type: Schema.Types.ObjectId,
+    ref: 'ParkingStore',
     required: true
   },
   product: {
@@ -38,10 +35,7 @@ const stockLedgerSchema = new Schema({
     ref: 'Product',
     required: true
   },
-  customer: {
-    type: String
-  },
-  variants: [variantLedgerSchema],
+  variants: [parkingVariantLedgerSchema],
   operator: {
     type: Schema.Types.ObjectId,
     ref: 'User'
@@ -58,9 +52,13 @@ const stockLedgerSchema = new Schema({
   stock_ID: {
     type: String,
     required: true
-  }
+  },
+  particulars: {
+    type: String,
+    required: true
+  },
 }, {
   timestamps: true
 });
 
-module.exports = mongoose.model('StockLedger', stockLedgerSchema);
+module.exports = mongoose.model('ParkingStockLedger', parkingStockLedgerSchema);

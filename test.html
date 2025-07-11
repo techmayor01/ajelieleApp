@@ -1,0 +1,55 @@
+<% if (entries && entries.length > 0) { %>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table datatable">
+        <thead class="thead-light">
+          <tr>						
+            <th>Date</th>
+            <th>Product Name</th>
+            <th>Transaction ID</th>
+            <th>Purchase Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+        <% entries.forEach(entry => { %>
+            <tr>
+            <td class="p-3"><%= entry.customer.customer_name %></td>
+            <td class="p-3"><%= new Date(entry.date).toDateString() %></td>
+            <td class="p-3"><%= entry.type %></td>
+            <td class="p-3"><%= entry.refNo %></td>
+            <td class="p-3">
+                <% if (entry.type === 'credit-sales' || entry.type === 'paid-sales') { %>
+                ₦<%= entry.amount.toLocaleString() %>
+                <% } else { %>
+                -
+                <% } %>
+            </td>
+            <td class="p-3">
+                <% if (entry.type === 'payment') { %>
+                ₦<%= entry.paid.toLocaleString() %>
+                <% } else { %>
+                -
+                <% } %>
+            </td>
+            <td class="p-3">
+                <% 
+                const debt = entry.debtBalance || 0;
+                const main = entry.mainBalance || 0;
+                %>
+                <% if (debt > 0) { %>
+                <span class="text-danger">-₦<%= debt.toLocaleString() %></span>
+                <% } else if (main > 0) { %>
+                <span class="text-primary">+₦<%= main.toLocaleString() %></span>
+                <% } else { %>
+                ₦0
+                <% } %>
+            </td>
+            </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+<% } else if (startDate && endDate && customerId) { %>
+  <div class="alert alert-warning text-center mt-3">No records found for this supplier within the selected date range.</div>
+<% } %>

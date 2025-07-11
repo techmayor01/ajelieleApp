@@ -51,6 +51,7 @@ const ReceivedStock = require("../model/ReceivedStock");
 const StockLedger =  require("../model/StockLedger");
 const ParkingStore = require("../model/ParkingStore");
 const ParkingStock = require("../model/ParkingStock");
+const ParkingStockLedger = require("../model/ParkingStockLedger");
 const Config = require('../model/NegSales');
 const Notification = require('../model/Notification');
 const StockAdjustment = require('../model/StockAdjustment');
@@ -417,81 +418,94 @@ router.get("/SuppliersInvoice", (req, res) => {
   }
 });
 
-router.post('/addinvoiceSuppliers', (req, res) => {
+router.post('/addinvoiceSuppliers', async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect('/');
 
-  User.findById(req.user._id)
-    .then(user => {
-      if (!user || !user.branch) {
-        return res.status(400).send('User or user branch not found.');
-      }
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user || !user.branch) {
+      return res.status(400).send('User or user branch not found.');
+    }
 
-      const {
-        supplier,
-        invoice_type, // 'debit' or 'credit'
-        amount,
-        payment_date,
-        reason
-      } = req.body;
+    const {
+      supplier,
+      invoice_type, // 'debit' or 'credit'
+      amount,
+      payment_date,
+      reason
+    } = req.body;
 
-      const newInvoice = new SupplierInvoice({
-        supplier,
-        branch: user.branch,
-        invoice_type,
-        amount,
-        payment_date,
-        reason,
-        created_by: user._id      
-      });
+    const amt = Number(amount);
 
-      return newInvoice.save()
-        .then((savedInvoice) => {
-          return Supplier.findByIdAndUpdate(
-            supplier,
-            { $push: { supplierInvoice: savedInvoice._id } },
-            { new: true }
-          ).then(() => savedInvoice);
-        })
-        .then((savedInvoice) => {
-          return Branch.findByIdAndUpdate(
-            user.branch,
-            { $push: { supplier_invoice: savedInvoice._id } },
-            { new: true }
-          ).then(() => savedInvoice);
-        })
-        .then((savedInvoice) => {
-          // Now add Supplier Ledger entry
-          return SupplierLedger.find({ supplier, branch: user.branch })
-            .sort({ createdAt: -1 })
-            .limit(1)
-            .then(([lastLedger]) => {
-              const prevBalance = lastLedger ? lastLedger.balance : 0;
-              const newBalance = invoice_type === 'debit'
-                ? prevBalance + Number(amount)
-                : prevBalance - Number(amount);
-
-              const ledgerEntry = new SupplierLedger({
-                supplier,
-                branch: user.branch,
-                type: invoice_type,
-                date: new Date(payment_date),
-                amount: Number(amount),
-                balance: newBalance,
-                reason
-              });
-
-              return ledgerEntry.save();
-            });
-        })
-        .then(() => {
-          res.redirect('/SuppliersInvoice');
-        });
-    })
-    .catch(err => {
-      console.error('Error processing supplier invoice:', err);
-      res.status(500).send('Internal Server Error');
+    // Save invoice
+    const newInvoice = new SupplierInvoice({
+      supplier,
+      branch: user.branch,
+      invoice_type,
+      amount: amt,
+      payment_date,
+      reason,
+      created_by: user._id
     });
+    const savedInvoice = await newInvoice.save();
+
+    await Supplier.findByIdAndUpdate(
+      supplier,
+      { $push: { supplierInvoice: savedInvoice._id } }
+    );
+
+    await Branch.findByIdAndUpdate(
+      user.branch,
+      { $push: { supplier_invoice: savedInvoice._id } }
+    );
+
+    // Get last ledger entry to compute running balance
+    const lastLedger = await SupplierLedger.findOne({
+      supplier,
+      branch: user.branch
+    }).sort({ createdAt: -1 });
+
+    const prevBalance = lastLedger ? lastLedger.Balance : 0;
+
+    let newBalance;
+    let ledgerAmount = 0;
+    let ledgerPaid = 0;
+
+    if (invoice_type === 'debit') {
+      // Debit: increase debt, so balance += amount
+      newBalance = prevBalance + amt;
+      ledgerAmount = amt;
+    } else if (invoice_type === 'credit') {
+      // Credit: decrease debt, so balance -= amount
+      newBalance = prevBalance - amt;
+      ledgerPaid = amt;
+    } else {
+      return res.status(400).send('Invalid invoice type.');
+    }
+
+    const ledgerEntry = new SupplierLedger({
+      supplier,
+      branch: user.branch,
+      type: invoice_type,
+      refNo: reason,
+      date: new Date(payment_date),
+      amount: ledgerAmount,
+      paid: ledgerPaid,
+      Balance: newBalance
+    });
+
+    await ledgerEntry.save();
+
+    return res.redirect('/SuppliersInvoice');
+  } catch (err) {
+    console.error('Error processing supplier invoice:', err);
+    res.status(500).send('Internal Server Error');
+  }
 });
+
+
+
+
 
 router.post('/editInvoiceSuppliers', (req, res) => {
   const { invoiceId, supplier, invoice_type, amount, payment_date, reason } = req.body;
@@ -2261,6 +2275,7 @@ router.get("/manageParkingStore", (req, res) => {
       res.redirect("/error-404");
     });
 });
+
 router.get("/stockAction", (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/");
 
@@ -2538,15 +2553,32 @@ router.post("/addInvoice", async (req, res, next) => {
     paid_amount
   } = req.body;
 
+  // ensure all product fields are arrays
   if (!Array.isArray(product)) product = [product];
   if (!Array.isArray(qty)) qty = [qty];
   if (!Array.isArray(unitcode)) unitcode = [unitcode];
   if (!Array.isArray(rate)) rate = [rate];
   if (!Array.isArray(total)) total = [total];
 
+  // filter out empty product names
+  const filtered = product.map((p, i) => ({
+    product: p?.trim(),
+    qty: qty[i],
+    unitcode: unitcode[i],
+    rate: rate[i],
+    total: total[i]
+  })).filter(item => item.product);
+
+  // unpack filtered back into arrays
+  product   = filtered.map(f => f.product);
+  qty       = filtered.map(f => f.qty);
+  unitcode  = filtered.map(f => f.unitcode);
+  rate      = filtered.map(f => f.rate);
+  total     = filtered.map(f => f.total);
+
   const len = product.length;
   if ([qty, unitcode, rate, total].some(arr => arr.length !== len)) {
-    return next({ status: 400, message: 'Product detail arrays must have the same length' });
+    return next({ status: 400, message: 'Product detail arrays must have the same length after filtering' });
   }
 
   const branchId = req.user.branch;
@@ -2565,21 +2597,25 @@ router.post("/addInvoice", async (req, res, next) => {
 
     const prefix = branch.branch_name.toUpperCase().slice(0, 2);
 
+    // generate invoice number
     const invoicePrefix = `INV-${prefix}-`;
     const latestInvoice = await Invoice.findOne({ invoice_no: { $regex: `^${invoicePrefix}` } }).sort({ createdAt: -1 });
     const nextInvoiceNum = latestInvoice?.invoice_no?.match(/\d+$/)
       ? parseInt(latestInvoice.invoice_no.match(/\d+$/)[0]) + 1 : 1;
     generatedInvoiceNo = `${invoicePrefix}${String(nextInvoiceNum).padStart(3, '0')}`;
 
+    // generate receipt number
     const receiptPrefix = sales_type === 'cash' ? `CH-${prefix}-` : `CR-${prefix}-`;
     const latestReceipt = await Invoice.findOne({ receipt_no: { $regex: `^${receiptPrefix}` } }).sort({ createdAt: -1 });
     const nextReceiptNum = latestReceipt?.receipt_no?.match(/\d+$/)
       ? parseInt(latestReceipt.receipt_no.match(/\d+$/)[0]) + 1 : 1;
     generatedReceiptNo = `${receiptPrefix}${String(nextReceiptNum).padStart(3, '0')}`;
 
+    // get config for negative sales
     const config = await Config.findOne({ key: "negativeSalesActive" });
     const negativeSalesActive = config?.value === true;
 
+    // find or create customer
     let customer = customer_id
       ? await Customer.findById(customer_id)
       : await Customer.create({
@@ -2593,26 +2629,19 @@ router.post("/addInvoice", async (req, res, next) => {
 
     if (!customer) throw { status: 400, message: 'Unable to identify or create customer.' };
 
+    // loop over products and save items
     for (let i = 0; i < len; i++) {
       const productName = product[i];
-      if (!productName?.trim()) continue;
-
-      const soldQtyRaw = Number(qty[i]);
+      const soldQty = Math.round(Number(qty[i]) * 2) / 2;
       const unitCode = unitcode[i];
       const itemRate = roundToTwo(Number(rate[i]));
       const itemTotal = roundToTwo(Number(total[i]));
-      const soldQty = Math.round(soldQtyRaw * 2) / 2;
 
       const productDoc = await Product.findOne({ product: productName, branch: branchId });
       if (!productDoc) continue;
 
       const sellingVariant = productDoc.variants.find(v => v.unitCode === unitCode);
       if (!sellingVariant) continue;
-
-      const baseVariant = productDoc.variants[0];
-      const baseEquivalent = unitCode === baseVariant.unitCode
-        ? soldQty
-        : soldQty * (sellingVariant.totalInBaseUnit || 1);
 
       if (!negativeSalesActive && sellingVariant.quantity < soldQty) {
         throw { status: 400, message: `Insufficient stock for ${productName} in ${unitCode}` };
@@ -2631,16 +2660,22 @@ router.post("/addInvoice", async (req, res, next) => {
 
       await productDoc.save();
 
+      // create StockLedger entry
       await StockLedger.create({
         product: productDoc._id,
         branch: branchId,
         operator: req.user._id,
+        customer: customer.customer_name,
         date: new Date(payment_date),
+        particular: 'sales',
+        stock_ID: generatedInvoiceNo,
         variants: productDoc.variants.map(v => ({
           unitCode: v.unitCode,
           stock_in: 0,
           stock_out: v.unitCode === unitCode ? soldQty : 0,
-          balance: v.quantity
+          balance: v.quantity,
+          cost_price: v.cost_price || 0,
+          total_sales: v.unitCode === unitCode ? itemTotal : 0
         }))
       });
 
@@ -2657,10 +2692,12 @@ router.post("/addInvoice", async (req, res, next) => {
         receipt_no: generatedReceiptNo,
         instock_qty: sellingVariant.quantity,
         branch: branchId,
-        operator: req.user._id
+        operator: req.user._id,
+        sales_type 
       });
     }
 
+    // save invoice
     savedInvoice = await Invoice.create({
       customer_id: customer._id,
       customer_name: customer.customer_name,
@@ -2683,33 +2720,45 @@ router.post("/addInvoice", async (req, res, next) => {
       createdBy: req.user._id
     });
 
-    // Handle sales type and counters
-    let ledgerType;
+    // update customer ledger & customer balance
+    const lastLedger = await CustomerLedger.findOne({ customer: customer._id, branch: branchId }).sort({ createdAt: -1 });
+    let prevBalance = lastLedger ? lastLedger.Balance : 0;
+    let newBalance = prevBalance;
+
     if (sales_type === 'credit') {
-      customer.total_debt = roundToTwo((customer.total_debt || 0) + remainingAmount);
-      customer.remaining_amount = customer.total_debt;
+      newBalance = prevBalance - remainingAmount;
+      customer.total_debt = newBalance;
+      customer.remaining_amount = newBalance;
       customer.sales_type = 'credit';
       customer.credit_sales_count = (customer.credit_sales_count || 0) + 1;
-      ledgerType = 'credit-sales';
+
+      await CustomerLedger.create({
+        customer: customer._id,
+        branch: branchId,
+        type: 'credit-sales',
+        refNo: generatedReceiptNo,
+        date: payment_date,
+        amount: grandTotalNum,
+        paid: 0,
+        Balance: newBalance
+      });
     } else if (sales_type === 'cash') {
       customer.sales_type = 'cash';
       customer.cash_sales_count = (customer.cash_sales_count || 0) + 1;
-      ledgerType = 'paid-sales';
+
+      await CustomerLedger.create({
+        customer: customer._id,
+        branch: branchId,
+        type: 'paid-sales',
+        refNo: generatedReceiptNo,
+        date: payment_date,
+        amount: grandTotalNum,
+        paid: 0,
+        Balance: prevBalance
+      });
     }
 
     await customer.save();
-
-    await CustomerLedger.create({
-      customer: customer._id,
-      branch: branchId,
-      type: ledgerType,
-      refNo: generatedReceiptNo,
-      date: payment_date,
-      amount: grandTotalNum,
-      paid: 0,
-      debtBalance: customer.total_debt || 0,
-      mainBalance: 0 // ✅ DO NOT update mainBalance here
-    });
 
     res.redirect(`/receipt/${savedInvoice._id}`);
   } catch (err) {
@@ -2717,6 +2766,9 @@ router.post("/addInvoice", async (req, res, next) => {
     next(err);
   }
 });
+
+
+
 
 router.get('/receipt/:invoiceId', async (req, res, next) => {
   try {
@@ -2755,6 +2807,73 @@ router.get('/receipt/:invoiceId', async (req, res, next) => {
     console.error('Error loading receipt:', err);
     next(err);
   }
+});
+
+router.get("/manage-sales", (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  User.findById(req.user._id)
+    .populate("branch")
+    .then(user => {
+      if (!user) return res.redirect("/");
+
+      const branchId = user.branch._id || user.branch;
+
+      if (user.role === 'owner') {
+        // If user is owner, fetch owner branch and all branches
+        Branch.findById(branchId)
+          .then(ownerBranch => {
+            Branch.find()
+              .then(allBranches => {
+                Invoice.find({ branch: branchId })
+                  .populate("customer_id")
+                  .populate("createdBy")
+                  .sort({ createdAt: -1 })
+                  .then(invoices => {
+                    res.render("Sales/manage-sales", {
+                      user,
+                      ownerBranch: { branch: ownerBranch },
+                      branches: allBranches,
+                      invoices
+                    });
+                  })
+                  .catch(err => {
+                    console.error("Error fetching invoices:", err);
+                    res.redirect("/error-404");
+                  });
+              })
+              .catch(err => {
+                console.error("Error fetching all branches:", err);
+                res.redirect("/error-404");
+              });
+          })
+          .catch(err => {
+            console.error("Error fetching owner branch:", err);
+            res.redirect("/error-404");
+          });
+      } else {
+        // If not owner, just fetch invoices for user's branch
+        Invoice.find({ branch: branchId })
+          .populate("customer_id")
+          .populate("createdBy")
+          .sort({ createdAt: -1 })
+          .then(invoices => {
+            res.render("Sales/manage-sales", {
+              user,
+              ownerBranch: { branch: user.branch },
+              invoices
+            });
+          })
+          .catch(err => {
+            console.error("Error fetching invoices:", err);
+            res.redirect("/error-404");
+          });
+      }
+    })
+    .catch(err => {
+      console.error("Error fetching user:", err);
+      res.redirect("/error-404");
+    });
 });
 
 
@@ -3365,15 +3484,19 @@ router.post("/transactions", async (req, res, next) => {
 
       const generatedRefNo = `${receiptPrefix}${String(nextNum).padStart(3, "0")}`;
 
-      let debt = customer.total_debt || 0;
-      let remainingDebt = Math.max(0, debt - paidAmount);
-      let excess = paidAmount > debt ? paidAmount - debt : 0;
+      // === Find last balance ===
+      const lastLedger = await CustomerLedger.findOne({ customer: customer._id }).sort({ createdAt: -1 });
+      const previousBalance = lastLedger ? lastLedger.Balance || 0 : 0;
 
-      // Update customer balances
-      customer.total_debt = remainingDebt;
-      customer.remaining_amount = remainingDebt;
+      // Since this is a payment, balance moves closer to zero
+      const newBalance = previousBalance + paidAmount;
+
+      // Update customer total debt
+      customer.total_debt = newBalance;
+      customer.remaining_amount = newBalance;
       await customer.save();
 
+      // === Add payment entry ===
       await CustomerLedger.create({
         customer: customer._id,
         branch: customer.branch._id,
@@ -3382,22 +3505,19 @@ router.post("/transactions", async (req, res, next) => {
         date: paymentDate,
         amount: 0,
         paid: paidAmount,
-        debtBalance: remainingDebt,
-        mainBalance: excess
+        Balance: newBalance
       });
 
       return res.redirect("/transactions?success=1");
     }
 
     if (selectedUserType === "loan") {
-      // Placeholder: can be expanded
       console.log("Loan repayment received:", {
         loanerId: selectedUserId,
         amount: paidAmount,
         date: paymentDate,
         paymentType
       });
-
       return res.redirect("/transactions");
     }
 
@@ -3408,6 +3528,7 @@ router.post("/transactions", async (req, res, next) => {
     next(err);
   }
 });
+
 
 // TRANSACTION ENDS HERE ----------------- TECH MAYOR GROUPS
 
@@ -3422,13 +3543,34 @@ router.get("/sales-report", async (req, res) => {
 
     const branchId = user.branch._id || user.branch;
 
-    const salesLedgers = await SalesLedger.find({ branch: branchId })
-      .populate("product")
-      .populate("customer")
-      .populate("operator")
-      .sort({ sale_date: -1 });
+    // Get filters from query
+    const { startDate, endDate, salesType } = req.query;
 
-    // Corrected Totals Logic
+    let salesLedgers = [];   // default: empty (table hidden)
+
+    // Only query if date range provided
+    if (startDate && endDate) {
+      // Build dynamic filter
+      const filter = {
+        branch: branchId,
+        sale_date: {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate)
+        }
+      };
+
+      if (salesType && salesType !== 'all') {
+        filter.sales_type = salesType;  // 'cash' or 'credit'
+      }
+
+      salesLedgers = await SalesLedger.find(filter)
+        .populate("product")
+        .populate("customer")
+        .populate("operator")
+        .sort({ sale_date: -1 });
+    }
+
+    // Totals logic
     let totalAmount = 0;
     let totalCash = 0;
     let totalCredit = 0;
@@ -3450,6 +3592,7 @@ router.get("/sales-report", async (req, res) => {
       totalAmount,
       totalCash,
       totalCredit,
+      filters: { startDate, endDate, salesType }
     };
 
     if (user.role === "owner") {
@@ -3468,7 +3611,6 @@ router.get("/sales-report", async (req, res) => {
   }
 });
 
-
 router.get("/sales-report-summary", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/");
 
@@ -3478,35 +3620,74 @@ router.get("/sales-report-summary", async (req, res) => {
 
     const branchId = user.branch._id || user.branch;
 
-    const salesLedgers = await SalesLedger.find({ branch: branchId })
-      .populate("product")
-      .populate("customer")
-      .populate("operator")
-      .sort({ sale_date: -1 });
+    // Get filters from query
+    const { startDate, endDate, salesType } = req.query;
 
-    if (user.role === 'owner') {
-      const ownerBranch = await Branch.findById(branchId);
-      const allBranches = await Branch.find();
+    let salesLedgers = [];   // default: empty (table hidden)
 
-      return res.render("Report/Sales/summary-report", {
-        user,
-        ownerBranch: { branch: ownerBranch },
-        branches: allBranches,
-        salesLedgers
-      });
+    // Only query if date range provided
+    if (startDate && endDate) {
+      // Build dynamic filter
+      const filter = {
+        branch: branchId,
+        sale_date: {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate)
+        }
+      };
+
+      if (salesType && salesType !== 'all') {
+        filter.sales_type = salesType;  // 'cash' or 'credit'
+      }
+
+      salesLedgers = await SalesLedger.find(filter)
+        .populate("product")
+        .populate("customer")
+        .populate("operator")
+        .sort({ sale_date: -1 });
     }
 
-    res.render("Report/Sales/summary-report", {
-      user,
-      ownerBranch: { branch: user.branch },
-      salesLedgers
+    // Totals logic
+    let totalAmount = 0;
+    let totalCash = 0;
+    let totalCredit = 0;
+
+    salesLedgers.forEach(sale => {
+      const amount = Number(sale.amount) || 0;
+      totalAmount += amount;
+
+      if (sale.sales_type === 'cash') {
+        totalCash += amount;
+      } else {
+        totalCredit += amount;
+      }
     });
 
+    const renderData = {
+      user,
+      salesLedgers,
+      totalAmount,
+      totalCash,
+      totalCredit,
+      filters: { startDate, endDate, salesType }
+    };
+
+    if (user.role === "owner") {
+      const ownerBranch = await Branch.findById(branchId);
+      const allBranches = await Branch.find();
+      renderData.ownerBranch = { branch: ownerBranch };
+      renderData.branches = allBranches;
+    } else {
+      renderData.ownerBranch = { branch: user.branch };
+    }
+
+    res.render("Report/Sales/summary-report", renderData);
   } catch (err) {
     console.error("Error loading sales-report:", err);
     res.redirect("/error-404");
   }
 });
+
 
 router.get("/sales-report-summaryt", (req, res) => {
   if (req.isAuthenticated()) {
@@ -3640,15 +3821,17 @@ router.get("/customer-report", (req, res) => {
 
 router.get("/stock-report", async (req, res) => {
   if (!req.isAuthenticated()) {
-    return res.redirect("/sign-in");
+    return res.redirect("/");
   }
 
   try {
     const user = await User.findById(req.user._id).populate("branch");
-    if (!user) return res.redirect("/sign-in");
+    if (!user) return res.redirect("/");
 
     const { productId, startDate, endDate } = req.query;
     const branchId = user.branch._id;
+
+    const filters = { productId, startDate, endDate }; // add this!
 
     const stockQuery = {
       branch: branchId,
@@ -3678,14 +3861,16 @@ router.get("/stock-report", async (req, res) => {
         user,
         ownerBranch: { branch: ownerBranch },
         branches: allBranches,
-         stockLedgers: productId ? stockLedgers : undefined
+        stockLedgers: productId ? stockLedgers : undefined,
+        filters
       });
     }
 
     res.render("Report/Stock/stock-report", {
       user,
       ownerBranch: { branch: user.branch },
-       stockLedgers: productId ? stockLedgers : undefined
+      stockLedgers: productId ? stockLedgers : undefined,
+      filters
     });
 
   } catch (err) {
@@ -3693,5 +3878,296 @@ router.get("/stock-report", async (req, res) => {
     res.redirect("/error-404");
   }
 });
+
+router.get('/api/products/search', async (req, res) => {
+  try {
+    const query = req.query.q || '';
+    const branchId = req.query.branchId;
+
+    const filter = {
+      product: { $regex: query, $options: 'i' }
+    };
+
+    if (branchId) {
+      filter.branch = branchId;
+    }
+
+    const products = await Product.find(filter).select('_id product');
+    res.json(products);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json([]);
+  }
+});
+
+
+router.get("/sold-stock-report", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.redirect("/");
+  }
+
+  try {
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/");
+
+    const { productId, startDate, endDate } = req.query;
+    const branchId = user.branch._id;
+
+    const filters = { productId, startDate, endDate }; // add this!
+
+    const stockQuery = {
+      branch: branchId,
+    };
+
+    if (productId) {
+      stockQuery.product = productId;
+    }
+
+    if (startDate || endDate) {
+      stockQuery.date = {};
+      if (startDate) stockQuery.date.$gte = new Date(startDate);
+      if (endDate) stockQuery.date.$lte = new Date(endDate);
+    }
+
+    const stockLedgers = await StockLedger.find(stockQuery)
+      .populate("product")
+      .populate("branch", "branch_name")
+      .populate("operator", "fullname")
+      .sort({ date: 1 });
+
+    if (user.role === 'owner') {
+      const ownerBranch = await Branch.findById(branchId);
+      const allBranches = await Branch.find();
+
+      return res.render("Report/Stock/sold-stock", {
+        user,
+        ownerBranch: { branch: ownerBranch },
+        branches: allBranches,
+        stockLedgers: productId ? stockLedgers : undefined,
+        filters
+      });
+    }
+
+    res.render("Report/Stock/sold-stock", {
+      user,
+      ownerBranch: { branch: user.branch },
+      stockLedgers: productId ? stockLedgers : undefined,
+      filters
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.redirect("/error-404");
+  }
+});
+
+router.get('/parking-stock-report', async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.redirect('/');
+  }
+
+  try {
+    const user = await User.findById(req.user._id).populate('branch');
+    if (!user) return res.redirect('/');
+
+    const branchId = user.branch._id;
+
+    // Get filters from query params
+    const { productId, parkingStoreId, startDate, endDate } = req.query;
+    const filters = { productId, parkingStoreId, startDate, endDate };
+
+    // Build the query
+    const ledgerQuery = { branch: branchId };
+
+    if (productId) {
+      ledgerQuery.product = productId;
+    }
+
+    if (parkingStoreId) {
+      ledgerQuery.parkingStore = parkingStoreId;
+    }
+
+    if (startDate || endDate) {
+      ledgerQuery.date = {};
+      if (startDate) ledgerQuery.date.$gte = new Date(startDate);
+      if (endDate) ledgerQuery.date.$lte = new Date(endDate);
+    }
+
+    // Fetch ledger data
+    const parkingStockLedgers = await ParkingStockLedger.find(ledgerQuery)
+      .populate('product')
+      .populate('parkingStore', 'name')
+      .populate('branch', 'branch_name')
+      .populate('operator', 'fullname')
+      .sort({ date: 1 });
+
+    // Fetch other data for filters / dropdowns
+    const parkingStores = await ParkingStore.find({ branch: branchId });
+    const products = await Product.find({ branch: branchId });
+
+    res.render('Report/Stock/parking-stock-report', {
+      user,
+      ownerBranch: { branch: user.branch },
+      parkingStockLedgers,
+      parkingStores,
+      products,
+      filters
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.redirect('/error-404');
+  }
+});
+
+router.get('/purchase-report', async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect('/');
+
+  try {
+    const user = await User.findById(req.user._id).populate('branch');
+    if (!user) return res.redirect('/');
+
+    const branchId = user.branch._id || user.branch;
+    const { supplierID, supplier, startDate, endDate } = req.query;
+
+    let purchaseReports = []; // default empty
+    const filters = { supplier, supplierID, startDate, endDate };  // keep for form
+
+    if (startDate || endDate || supplier || supplierID) {
+      const filter = { branch: branchId };
+
+      if (startDate || endDate) {
+        filter.payment_date = {};
+        if (startDate) filter.payment_date.$gte = new Date(startDate);
+        if (endDate) filter.payment_date.$lte = new Date(endDate);
+      }
+
+      if (supplierID) {
+        // use exact supplier ID if provided
+        filter.supplier = supplierID;
+      } else if (supplier) {
+        // fallback: search by supplier name (correct field is 'supplier')
+        const supplierDoc = await Supplier.findOne({ supplier: { $regex: supplier, $options: 'i' } });
+        if (supplierDoc) {
+          filter.supplier = supplierDoc._id;
+        } else {
+          // supplier not found → return empty
+          return res.render('Report/Purchase/purchase-report', {
+            user,
+            purchaseReports,
+            filters,
+            ownerBranch: { branch: user.branch }
+          });
+        }
+      }
+
+      purchaseReports = await ReceivedStock.find(filter)
+        .populate('supplier')
+        .populate('items.product')
+        .sort({ payment_date: -1 });
+    }
+
+    const renderData = { user, purchaseReports, filters };
+
+    if (user.role === 'owner') {
+      const ownerBranch = await Branch.findById(branchId);
+      const allBranches = await Branch.find();
+      renderData.ownerBranch = { branch: ownerBranch };
+      renderData.branches = allBranches;
+    } else {
+      renderData.ownerBranch = { branch: user.branch };
+    }
+
+    res.render('Report/Purchase/purchase-report', renderData);
+
+  } catch (err) {
+    console.error('Error loading purchase-report:', err);
+    res.redirect('/error-404');
+  }
+});
+
+router.get('/supplier-report', async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect('/');
+
+  try {
+    const user = await User.findById(req.user._id).populate('branch');
+    if (!user) return res.redirect('/');
+
+    const branchId = user.branch._id || user.branch;
+    const { supplierID, supplier, startDate, endDate } = req.query;
+
+    let supplierReports = []; // default empty
+    const filters = { supplier, supplierID, startDate, endDate };
+
+    if (startDate || endDate || supplier || supplierID) {
+      const filter = { branch: branchId };
+
+      if (startDate || endDate) {
+        filter.date = {};
+        if (startDate) filter.date.$gte = new Date(startDate);
+        if (endDate) filter.date.$lte = new Date(endDate);
+      }
+
+      if (supplierID) {
+        filter.supplier = supplierID;
+      } else if (supplier) {
+        const supplierDoc = await Supplier.findOne({ supplier: { $regex: supplier, $options: 'i' } });
+        if (supplierDoc) {
+          filter.supplier = supplierDoc._id;
+        } else {
+          // supplier not found → return empty
+          return res.render('Report/Supplier/supplier-report', {
+            user,
+            supplierReports,
+            filters,
+            ownerBranch: { branch: user.branch }
+          });
+        }
+      }
+
+      supplierReports = await SupplierLedger.find(filter)
+        .populate('supplier')
+        .sort({ date: 1, createdAt: 1 }); // oldest first for running balance
+    }
+
+    const renderData = { user, supplierReports, filters };
+
+    if (user.role === 'owner') {
+      const ownerBranch = await Branch.findById(branchId);
+      const allBranches = await Branch.find();
+      renderData.ownerBranch = { branch: ownerBranch };
+      renderData.branches = allBranches;
+    } else {
+      renderData.ownerBranch = { branch: user.branch };
+    }
+
+    res.render('Report/Supplier/supplier-report', renderData);
+  } catch (err) {
+    console.error('Error loading supplier-report:', err);
+    res.redirect('/error-404');
+  }
+});
+
+
+
+
+router.get('/api/suppliers/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.json([]);
+
+  try {
+    const suppliers = await Supplier.find({
+      supplier: { $regex: q, $options: 'i' }
+    }).limit(10); // limit results for performance
+
+    res.json(suppliers);
+  } catch (err) {
+    console.error('Error searching suppliers:', err);
+    res.status(500).json([]);
+  }
+});
+
+
+
 
 module.exports = router;

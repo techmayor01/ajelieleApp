@@ -82,56 +82,52 @@
 							</li>
 						</ul>
 					</div>
-					<div class="card">
-						<div class="card-body pb-1">
-							<form action="https://dreamspos.dreamstechnologies.com/html/template/best-seller.html">
-								<div class="row align-items-end">
-									<div class="col-md-3">
-										<div class="mb-3">
-											<label class="form-label">Choose Date </label>
-											<div class="input-icon-start position-relative">
-												<input type="text" class="form-control date-range bookingrange" placeholder="dd/mm/yyyy - dd/mm/yyyy">
-												<span class="input-icon-left">
-													<i class="ti ti-calendar"></i>
-												</span>
-											</div>
-										</div>
+				<div class="card">
+					<div class="card-body pb-1">
+						<form action="/sales-report-summary" method="get">
+						<div class="row align-items-end">
+							<div class="col-lg-10">
+							<div class="row">
+								<div class="col-md-4 col-lg-8">
+								<div class="mb-3">
+									<label class="form-label">Choose Date </label>
+									<div class="input-icon-start position-relative">
+									<div style="display: flex; align-items: center; gap: 5px;">
+										<input type="date" name="startDate" id="startDate" class="form-control"
+										value="<%= filters?.startDate || '' %>" />
+										<span class="text-gray-500">to</span>
+										<input type="date" name="endDate" id="endDate" class="form-control"
+										value="<%= filters?.endDate || '' %>" />
 									</div>
-									<div class="col-md-3">
-										<div class="mb-3">
-											<label class="form-label">Store</label>
-											<select class="select">
-												<option>All</option>
-												<option>Electro Mart</option>
-												<option>Quantum Gadgets</option>
-												<option>Prime Bazaar</option>
-											</select>
-										</div>
-									</div>
-									<div class="col-md-3">
-										<div class="mb-3">
-											<label class="form-label">Category</label>
-											<select class="select">
-												<option>All</option>
-												<option>Cash</option>
-												<option>Credit</option>
-											</select>
-										</div>
-									</div>
-									<div class="col-lg-3">
-										<div class="mb-3">
-											<button class="btn btn-primary" type="submit">Generate Report</button>
-										</div>
 									</div>
 								</div>
-							</form>
+								</div>
+								<div class="col-md-4">
+								<div class="mb-3">
+									<label class="form-label">Sales Type</label>
+									<select class="select" name="salesType">
+									<option value="all" <%= filters?.salesType === 'all' ? 'selected' : '' %>>All</option>
+									<option value="cash" <%= filters?.salesType === 'cash' ? 'selected' : '' %>>Cash</option>
+									<option value="credit" <%= filters?.salesType === 'credit' ? 'selected' : '' %>>Credit</option>
+									</select>
+								</div>
+								</div>
+							</div>
+							</div>
+							<div class="col-lg-2">
+							<div class="mb-3">
+								<button class="btn btn-primary w-100" type="submit">Generate Report</button>
+							</div>
+							</div>
 						</div>
+						</form>
+					</div>
 					</div>
 					<!-- /product list -->
 					<div class="card no-search">
 						<div class="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
 							<div>
-								<h4>Summary Report</h4>
+								<h4>Sales Report</h4>
 							</div>
 							<ul class="table-top-head">
 								<li class="me-2">
@@ -145,39 +141,41 @@
 								</li>
 							</ul>
 						</div>
-						<div class="card-body p-0">
-							<div class="table-responsive">
-								<table class="table datatable">
-									<thead class="thead-light">
-										<tr>
-											<th>Sales Date</th>
-											<th>Customer</th>
-											<th>Sold Qty</th>
-											<th>Sold Amount</th>
-											<th>Receipt No.</th>
-											<th>Operator</th>
-											<th>Note</th>
-										</tr>
-									</thead>
-																	<tbody>
-  <% if (salesLedgers.length > 0) { %>
-    <% salesLedgers.forEach(sale => { %>
-      <tr>
-        <td><%= new Date(sale.sale_date).toLocaleDateString() %></td>
-        <td><%= sale.customer_name || '-' %></td>
-        <td><%= sale.quantity_sold %></td>
-        <td>₦<%= sale.amount.toLocaleString() %></td>
-        <td><%= sale.receipt_no %></td>
-        <td><%= sale.operator?.fullName || 'Unknown' %></td>
-        <td>jufbeuigvsdfvbduidf</td>
-      </tr>
-    <% }); %>
+						<% if (salesLedgers && salesLedgers.length > 0) { %>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table datatable">
+        <thead class="thead-light">
+          <tr>
+			<th>Sales Date</th>
+            <th>Customer</th>
+            <th>Sold Qty</th>
+            <th>Sold Amount</th>
+            <th>Receipt No.</th>
+            <th>Operator</th>
+			<th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% salesLedgers.forEach(sale => { %>
+            <tr>
+              <td><%= new Date(sale.sale_date).toLocaleDateString() %></td>
+              <td><%= sale.customer_name || '-' %></td>
+              <td><%= sale.quantity_sold %></td>
+              <td>₦<%= sale.amount.toLocaleString() %></td>
+              <td><%= sale.receipt_no %></td>
+              <td><%= sale.operator?.fullname || 'Unknown' %></td>
+			  <td><%= sale.notes || '-' %></td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+<% } else if (filters?.startDate && filters?.endDate) { %>
+  <div class="alert alert-warning text-center mt-3">No sales records found within the selected date range.</div>
+<% } %>
 
-  <% } %>
-</tbody>
-								</table>
-							</div>
-						</div>
 					</div>
 					<!-- /product list -->
 				</div>

@@ -133,43 +133,45 @@
 					</div>
 
 					<div class="card">
-						<div class="card-body pb-1">
-							<form action="">
-								<div class="row align-items-end">
-									<div class="col-lg-10">
-										<div class="row">
-											<div class="col-md-4 col-lg-8">
-												<div class="mb-3">
-													<label class="form-label">Choose Date </label>
-													<div class="input-icon-start position-relative">
-														<div style="display: flex; align-items: center; gap: 5px;">
-															<input type="date" name="startDate" id="startDate" class="form-control"  />
-															<span class="text-gray-500">to</span>
-															<input type="date" name="endDate" id="endDate" class="form-control"/>
-														</div>
-													</div>
-												</div>
-											</div>
-											<div class="col-md-4">
-												<div class="mb-3">
-													<label class="form-label">Sales Type</label>
-													<select class="select">
-														<option value="all">All</option>
-														<option value="cash">Cash</option>
-														<option value="credit">Credit</option>
-													</select>
-												</div>
-											</div>
-										</div>
+					<div class="card-body pb-1">
+						<form action="/sales-report" method="get">
+						<div class="row align-items-end">
+							<div class="col-lg-10">
+							<div class="row">
+								<div class="col-md-4 col-lg-8">
+								<div class="mb-3">
+									<label class="form-label">Choose Date </label>
+									<div class="input-icon-start position-relative">
+									<div style="display: flex; align-items: center; gap: 5px;">
+										<input type="date" name="startDate" id="startDate" class="form-control"
+										value="<%= filters?.startDate || '' %>" />
+										<span class="text-gray-500">to</span>
+										<input type="date" name="endDate" id="endDate" class="form-control"
+										value="<%= filters?.endDate || '' %>" />
 									</div>
-									<div class="col-lg-2">
-										<div class="mb-3">
-											<button class="btn btn-primary w-100" type="submit">Generate Report</button>
-										</div>
 									</div>
 								</div>
-							</form>
+								</div>
+								<div class="col-md-4">
+								<div class="mb-3">
+									<label class="form-label">Sales Type</label>
+									<select class="select" name="salesType">
+									<option value="all" <%= filters?.salesType === 'all' ? 'selected' : '' %>>All</option>
+									<option value="cash" <%= filters?.salesType === 'cash' ? 'selected' : '' %>>Cash</option>
+									<option value="credit" <%= filters?.salesType === 'credit' ? 'selected' : '' %>>Credit</option>
+									</select>
+								</div>
+								</div>
+							</div>
+							</div>
+							<div class="col-lg-2">
+							<div class="mb-3">
+								<button class="btn btn-primary w-100" type="submit">Generate Report</button>
+							</div>
+							</div>
 						</div>
+						</form>
+					</div>
 					</div>
 					
 					<div class="card no-search">
@@ -189,55 +191,56 @@
 								</li>
 							</ul>
 						</div>
-						<div class="card-body p-0">
-							<div class="table-responsive">
-								<table class="table datatable">
-									<thead class="thead-light">
-										<tr>
-											<th>Product Name</th>
-											<th>Sales Date</th>
-											<th>Unit</th>
-											<th>Unit Price</th>
-											<th>Customer</th>
-											<th>Sold Qty</th>
-											<th>Sold Amount</th>
-											<th>Receipt No.</th>
-											<th>Instock Qty</th>
-											<th>Operator</th>
-										</tr>
-									</thead>
-									<tbody>
-  <% if (salesLedgers.length > 0) { %>
-    <% salesLedgers.forEach(sale => { %>
-      <tr>
-        <td>
-          <div class="d-flex align-items-center">
-            <a class="avatar avatar-md">
-              <img src="/media/uploads/<%= sale.product?.product_image %>" class="img-fluid" alt="img">
-            </a>
-            <div class="ms-2">
-              <p class="text-dark mb-0"><%= sale.product_name %></p>
-            </div>
-          </div>
-        </td>
-        <td><%= new Date(sale.sale_date).toLocaleDateString() %></td>
-        <td><%= sale.unit %></td>
-        <td>₦<%= sale.unit_price.toLocaleString() %></td>
-        <td><%= sale.customer_name || '-' %></td>
-        <td><%= sale.quantity_sold %></td>
-        <td>₦<%= sale.amount.toLocaleString() %></td>
-        <td><%= sale.receipt_no %></td>
-        <td><%= sale.instock_qty %></td>
-        <td><%= sale.operator?.fullName || 'Unknown' %></td>
-      </tr>
-    <% }); %>
+						<% if (salesLedgers && salesLedgers.length > 0) { %>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table datatable">
+        <thead class="thead-light">
+          <tr>
+            <th>Product Name</th>
+            <th>Sales Date</th>
+            <th>Unit</th>
+            <th>Unit Price</th>
+            <th>Customer</th>
+            <th>Sold Qty</th>
+            <th>Sold Amount</th>
+            <th>Receipt No.</th>
+            <th>Instock Qty</th>
+            <th>Operator</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% salesLedgers.forEach(sale => { %>
+            <tr>
+              <td>
+                <div class="d-flex align-items-center">
+                  <a class="avatar avatar-md">
+                    <img src="/media/uploads/<%= sale.product?.product_image %>" class="img-fluid" alt="img">
+                  </a>
+                  <div class="ms-2">
+                    <p class="text-dark mb-0"><%= sale.product_name %></p>
+                  </div>
+                </div>
+              </td>
+              <td><%= new Date(sale.sale_date).toLocaleDateString() %></td>
+              <td><%= sale.unit %></td>
+              <td>₦<%= sale.unit_price.toLocaleString() %></td>
+              <td><%= sale.customer_name || '-' %></td>
+              <td><%= sale.quantity_sold %></td>
+              <td>₦<%= sale.amount.toLocaleString() %></td>
+              <td><%= sale.receipt_no %></td>
+              <td><%= sale.instock_qty %></td>
+              <td><%= sale.operator?.fullname || 'Unknown' %></td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+<% } else if (filters?.startDate && filters?.endDate) { %>
+  <div class="alert alert-warning text-center mt-3">No sales records found within the selected date range.</div>
+<% } %>
 
-  <% } %>
-</tbody>
-
-								</table>
-							</div>
-						</div>
 					</div>
 					<!-- /product list -->
 				</div>

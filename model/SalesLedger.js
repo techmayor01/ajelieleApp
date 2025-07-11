@@ -10,6 +10,11 @@ const salesLedgerSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  sales_type: {
+  type: String,
+  enum: ['cash', 'credit'],
+  required: true
+},
   sale_date: {
     type: Date,
     required: true
