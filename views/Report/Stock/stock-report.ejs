@@ -205,60 +205,56 @@
 									</li>
 								</ul>
 							</div>
-						 <% if (stockLedgers && stockLedgers.length > 0) { %>
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table datatable">
-          <thead class="thead-light">
-            <tr>
-              <th>Date</th>
-              <th>Product</th>
-              <th>Particular</th>
-              <th>Customer</th>
-              <th>StockIn</th>
-              <th>StockOut</th>
-              <th>Final Quantity</th>
-              <th>Operator</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% stockLedgers.forEach(ledger => { %>
-              <tr>
-                <td><%= new Date(ledger.date).toLocaleDateString() %></td>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a class="avatar avatar-md">
-                      <img src="/media/uploads/<%= ledger.product?.product_image || 'default.png' %>" class="img-fluid" alt="img">
-                    </a>
-                    <div class="ms-2">
-                      <p class="text-dark mb-0"><%= ledger.product?.product || '-' %></p>
-                    </div>
-                  </div>
-                </td>
-                <td><%= ledger.particular || '-' %> (<%= ledger.stock_ID || '-' %>)</td>
-                <td><%= ledger.customer || '-' %></td>
-                <td>
-                  <% let totalIn = ledger.variants.reduce((sum, v) => sum + (v.stock_in || 0), 0); %>
-                  <%= totalIn %>
-                </td>
-                <td>
-                  <% let totalOut = ledger.variants.reduce((sum, v) => sum + (v.stock_out || 0), 0); %>
-                  <%= totalOut %>
-                </td>
-                <td>
-                  <% let balance = ledger.variants.reduce((sum, v) => sum + (v.balance || 0), 0); %>
-                  <%= balance %>
-                </td>
-                <td><%= ledger.operator?.fullname || 'Unknown' %></td>
-              </tr>
-            <% }); %>
-          </tbody>
-        </table>
+<% if (stockLedgers && stockLedgers.length > 0) { %>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table datatable">
+        <thead class="thead-light">
+          <tr>
+            <th>Date</th>
+            <th>Product</th>
+            <th>Particular</th>
+            <th>Customer</th>
+            <th>StockIn</th>
+            <th>StockOut</th>
+            <th>Final Quantity</th>
+            <th>Operator</th>
+          </tr>
+        </thead>
+<tbody>
+<% stockLedgers.forEach(ledger => { %>
+  <tr>
+    <td data-order="<%= ledger.createdAt.toISOString() %>">
+      <%= new Date(ledger.date).toLocaleDateString() %>
+    </td>
+    <td>
+      <div class="d-flex align-items-center">
+        <a class="avatar avatar-md">
+          <img src="/media/uploads/<%= ledger.product?.product_image || 'default.png' %>" class="img-fluid" alt="img">
+        </a>
+        <div class="ms-2">
+          <p class="text-dark mb-0"><%= ledger.product?.product || '-' %></p>
+        </div>
       </div>
+    </td>
+    <td><%= ledger.particular || '-' %> (<%= ledger.stock_ID || '-' %>)</td>
+    <td><%= ledger.customer || '-' %></td>
+    <td><%= ledger.variants[0]?.stock_in || 0 %></td>
+    <td><%= ledger.variants[0]?.stock_out || 0 %></td>
+    <td><%= ledger.variants[0]?.balance || 0 %></td>
+    <td><%= ledger.operator?.fullname || 'Unknown' %></td>
+  </tr>
+<% }); %>
+</tbody>
+
+
+      </table>
     </div>
-  <% } else if (filters?.startDate || filters?.endDate || filters?.productId) { %>
-    <div class="alert alert-warning text-center mt-3">No stock records found for your search.</div>
-  <% } %>
+  </div>
+<% } else if (filters?.startDate || filters?.endDate || filters?.productId) { %>
+  <div class="alert alert-warning text-center mt-3">No stock records found for your search.</div>
+<% } %>
+
 </div>
 						</div>
 						<!-- /product list -->

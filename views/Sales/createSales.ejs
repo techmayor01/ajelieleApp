@@ -318,7 +318,7 @@
 										<a href="javascript:void(0);"><i class="ti ti-layout-grid fs-16 me-2"></i><span>Sales</span><span class="menu-arrow"></span></a>
 										<ul>
 											<li><a href="/createSales">Create Sales</a></li>
-											<li><a href="pos-orders.html">Manage Sales</a></li>
+											<li><a href="/manage-sales">Manage Sales</a></li>
 										</ul>
 									</li>
 									<li><a href="invoice.html"><i class="ti ti-file-invoice fs-16 me-2"></i><span>Invoices</span></a></li>
@@ -328,7 +328,7 @@
 								<h6 class="submenu-hdr">Purchases</h6>
 								<ul>
 									<li><a href="/purchase-stock"><i class="ti ti-shopping-bag fs-16 me-2"></i><span>Purchases</span></a></li>
-									<li><a href="purchase-order-report.html"><i class="ti ti-file-unknown fs-16 me-2"></i><span>Purchase Order</span></a></li>
+									<li><a href="/managePurchase"><i class="ti ti-file-unknown fs-16 me-2"></i><span>Purchase Order</span></a></li>
 								</ul>
 							</li>
 							<li class="submenu-open">
@@ -342,7 +342,7 @@
 										</ul>
 									</li>									
 									<li><a href="/SuppliersInvoice"><i class="ti ti-file-pencil fs-16 me-2"></i><span>Supplier Invoice</span></a></li>
-									<li><a href="/transactions"><i class="ti ti-building-bank fs-16 me-2"></i><span>Transactions</span></a></li>
+									<li><a href="/transactions"><i class="ti ti-building-bank fs-16 me-2"></i><span>Payments</span></a></li>
 									<li><a href="/manageLoan"><i class="ti ti-moneybag fs-16 me-2"></i><span>Loan</span></a></li>
 
 								</ul>
@@ -399,41 +399,24 @@
 											<li><a href="/sales-report-summary">Summary Report</a></li>
 										</ul>
 									</li>
-									<li><a href="purchase-report.html"><i class="ti ti-chart-pie-2 fs-16 me-2"></i><span>Purchase report</span></a></li>
+									<li><a href="/purchase-report"><i class="ti ti-chart-pie-2 fs-16 me-2"></i><span>Purchase report</span></a></li>
 									<li class="submenu">
 										<a href="javascript:void(0);"><i class="ti ti-triangle-inverted fs-16 me-2"></i><span>Inventory Report</span><span class="menu-arrow"></span></a>
 										<ul>
-											<li><a href="inventory-report.html">Inventory Report</a></li>
-											<li><a href="/stock-report">Stock History</a></li>
-											<li><a href="sold-stock.html">Sold Stock</a></li>
+											<li><a href="/stock-report">Stock Report</a></li>
+											<li><a href="/sold-stock-report">Sold Stock</a></li>
+											<li><a href="/parking-stock-report">Parking Store Report</a></li>
 										</ul>
 									</li>
-									<li><a href="invoice-report.html"><i class="ti ti-businessplan fs-16 me-2"></i><span>Invoice Report</span></a></li>
-									<li class="submenu">
-										<a href="javascript:void(0);"><i class="ti ti-user-star fs-16 me-2"></i><span>Supplier Report</span><span class="menu-arrow"></span></a>
-										<ul>
-											<li><a href="supplier-report.html">Supplier Report</a></li>
-											<li><a href="supplier-due-report.html">Supplier Due Report</a></li>
-										</ul>
+									<li>
+										<a href="/supplier-report"><i class="ti ti-user-star fs-16 me-2"></i><span>Supplier Report</span></a>
+										
 									</li>
-									<li class="submenu">
-										<a href="javascript:void(0);"><i class="ti ti-report fs-16 me-2"></i><span>Customer Report</span><span class="menu-arrow"></span></a>
-										<ul>
-											<li><a href="/customer-report">Customer Report</a></li>
-											<li><a href="customer-due-report.html">Customer Due Report</a></li>
-										</ul>
-									</li>
-									<li class="submenu">
-										<a href="javascript:void(0);"><i class="ti ti-report-analytics fs-16 me-2"></i><span>Product Report</span><span class="menu-arrow"></span></a>
-										<ul>
-											<li><a href="product-report.html">Product Report</a></li>
-											<li><a href="product-expiry-report.html">Product Expiry Report</a></li>
-											<li><a href="product-quantity-alert.html">Product Quantity Alert</a></li>
-										</ul>
+									<li>
+										<a href="/customer-report"><i class="ti ti-report fs-16 me-2"></i><span>Customer Report</span></a>
 									</li>
 									<li><a href="expense-report.html"><i class="ti ti-file-vector fs-16 me-2"></i><span>Expense Report</span></a></li>
 									<li><a href="profit-and-loss.html"><i class="ti ti-chart-donut fs-16 me-2"></i><span>Profit & Loss</span></a></li>
-									<li><a href="annual-report.html"><i class="ti ti-report-search fs-16 me-2"></i><span>Annual Report</span></a></li>
 								</ul>
 							</li>
 							<li class="submenu-open">
@@ -455,9 +438,9 @@
 							</li>
 							
 							<li class="submenu-open">
-								<h6 class="submenu-hdr">Help</h6>
+								<h6 class="submenu-hdr">Logs</h6>
 								<ul>
-									<li><a href="javascript:void(0);"><i class="ti ti-file-text fs-16 me-2"></i><span>Documentation</span></a></li>								
+									<li><a href="/view-log"><i class="ti ti-file-text fs-16 me-2"></i><span>View Logs</span></a></li>								
 								</ul>
 							</li>
 						</ul>
@@ -620,7 +603,7 @@ document.addEventListener("DOMContentLoaded", function () {
   <tbody>
     <!-- First visible row -->
     <tr class="text-sm product-row">
-      <td>
+      <td style="position: relative;">
         <input class="form-control productSearch" autocomplete="off" type="text" name="product" placeholder="product">
         <ul class="productSuggestions absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded shadow text-sm max-h-60 overflow-y-auto d-none" style="min-height: 100px;"></ul>
       </td>
@@ -636,7 +619,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     <!-- Hidden template row -->
     <tr class="text-sm product-row d-none" id="productRowTemplate">
-      <td>
+      <td style="position: relative;">
         <input class="form-control productSearch" autocomplete="off" type="text" name="product" placeholder="product">
         <ul class="productSuggestions absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded shadow text-sm max-h-60 overflow-y-auto d-none" style="min-height: 100px;"></ul>
       </td>
@@ -687,6 +670,15 @@ document.addEventListener("DOMContentLoaded", function () {
 														<td class="text-end" style="width: 16%;"><input id="grandTotalInput" placeholder="Grand Total" name="grand_total" type="number" class="form-control"></td>
 													</tr>
 												</table>
+												<style>
+													#salesWarningBox {
+  font-size: 0.9rem;
+  color: orange;
+}
+
+												</style>
+												<div id="salesWarningBox" class="text-warning mt-2"></div>
+
 											</div>
 										</div>			
 																		
@@ -778,10 +770,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
   const subtotalDisplay = document.getElementById("subtotalDisplay");
   const creditLimitDisplay = document.getElementById("creditLimitDisplay");
+  const balanceDisplay = document.getElementById("balanceDisplay");
 
-  // fixed credit limit only
-  const customerCreditLimit = 0;
-  creditLimitDisplay.textContent = `+₦${customerCreditLimit.toFixed(2)}`;
+  // Add this to HTML: <div id="salesWarningBox" class="text-warning mt-2"></div>
+  const salesWarningBox = document.getElementById("salesWarningBox");
+
+  const customerIdField = document.getElementById("customerIdField");
+  const input = document.getElementById("customerSearch");
+  const suggestionBox = document.getElementById("customerSuggestions");
+
+  let customerBalanceValue = 0; // shared by both parts
+  let customerCreditLimit = 0;
 
   function attachProductEvents(row) {
     const productInput = row.querySelector(".productSearch");
@@ -794,7 +793,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     productInput.addEventListener("input", async () => {
       const query = productInput.value.trim();
-      if (query.length < 2) {
+      if (query.length < 1) {
         productSuggestions.classList.add("d-none");
         return;
       }
@@ -805,6 +804,12 @@ document.addEventListener('DOMContentLoaded', function () {
         products.forEach(product => {
           const li = document.createElement("li");
           li.className = "p-2 hover:bg-gray-100 cursor-pointer";
+          li.style.display = 'block';
+          li.style.width = '100%';
+          li.style.whiteSpace = 'nowrap';
+          li.style.overflow = 'hidden';
+          li.style.textOverflow = 'ellipsis';
+
           li.textContent = `${product.product} (${product.available_qty ?? 0} available)`;
           li.addEventListener("click", () => {
             productInput.value = product.product;
@@ -825,7 +830,6 @@ document.addEventListener('DOMContentLoaded', function () {
             totalInput.value = ((parseFloat(rateInput.value) || 0) * (parseFloat(qtyInput.value) || 1)).toFixed(2);
             productSuggestions.classList.add("d-none");
             updateTotals();
-
             maybeAddNewRow(row);
           });
           productSuggestions.appendChild(li);
@@ -905,10 +909,19 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     const discount = parseFloat(discountInput?.value) || 0;
-    const salesType = salesTypeSelect?.value || "cash";
+    let salesType = salesTypeSelect?.value || "cash";
     let grandTotal = subtotal - discount;
 
+    salesWarningBox.textContent = ""; // clear warning
+
     if (salesType === "cash") {
+      if (customerBalanceValue < 0) {
+        grandTotal += Math.abs(customerBalanceValue);
+      } else if (customerBalanceValue > 0) {
+        salesWarningBox.textContent = `Customer has a balance of ₦${customerBalanceValue.toLocaleString()}. Switched to credit sales.`;
+        salesTypeSelect.value = "credit";
+        salesType = "credit";
+      }
       paidAmountInput.value = grandTotal.toFixed(2);
       paidAmountInput.setAttribute("readonly", true);
     } else {
@@ -917,36 +930,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     subtotalDisplay.textContent = `₦${subtotal.toFixed(2)}`;
     grandTotalInput.value = grandTotal.toFixed(2);
-    creditLimitDisplay.textContent = `+₦${customerCreditLimit.toFixed(2)}`;
+    creditLimitDisplay.textContent = `+₦${customerCreditLimit.toLocaleString()}`;
   }
 
-  discountInput?.addEventListener("input", updateTotals);
-  paidAmountInput?.addEventListener("input", updateTotals);
-  salesTypeSelect?.addEventListener("change", updateTotals);
-
-  const firstRow = tbody.querySelector(".product-row:not(.d-none)");
-  if (firstRow) bindRowEvents(firstRow);
-
-  updateTotals();
-});
-</script>
-
-
-
-
-
-
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-  const input = document.getElementById("customerSearch");
-  const suggestionBox = document.getElementById("customerSuggestions");
-  const customerIdField = document.getElementById("customerIdField");
-
-  const creditLimitDisplay = document.getElementById("creditLimitDisplay");
-  const balanceDisplay = document.getElementById("balanceDisplay");
-
-  let customerBalanceValue = 0;
-
+  // Customer search & select
   input.addEventListener("input", function () {
     const query = input.value.trim();
     if (!query) {
@@ -972,10 +959,10 @@ document.addEventListener("DOMContentLoaded", function () {
             input.value = customer.name;
             customerIdField.value = customer._id;
 
-            const creditLimit = Number(customer.credit_limit) || 0;
+            customerCreditLimit = Number(customer.credit_limit) || 0;
             customerBalanceValue = Number(customer.remaining_amount) || 0;
 
-            creditLimitDisplay.textContent = `+₦${creditLimit.toLocaleString()}`;
+            creditLimitDisplay.textContent = `+₦${customerCreditLimit.toLocaleString()}`;
 
             if (customerBalanceValue < 0) {
               balanceDisplay.textContent = `-₦${Math.abs(customerBalanceValue).toLocaleString()}`;
@@ -988,6 +975,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
 
             suggestionBox.innerHTML = '';
+            updateTotals(); // recalculate totals immediately
           });
 
           suggestionBox.appendChild(div);
@@ -1004,8 +992,18 @@ document.addEventListener("DOMContentLoaded", function () {
       suggestionBox.innerHTML = '';
     }
   });
+
+  discountInput?.addEventListener("input", updateTotals);
+  paidAmountInput?.addEventListener("input", updateTotals);
+  salesTypeSelect?.addEventListener("change", updateTotals);
+
+  const firstRow = tbody.querySelector(".product-row:not(.d-none)");
+  if (firstRow) bindRowEvents(firstRow);
+
+  updateTotals();
 });
 </script>
+
 
 
 

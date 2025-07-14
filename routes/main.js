@@ -63,6 +63,8 @@ const SupplierInvoice = require('../model/SupplierInvoice');
 const SupplierLedger = require('../model/SupplierLedger');
 const SalesLedger = require('../model/SalesLedger');
 const Invoice = require('../model/Invoice');
+const Transaction = require('../model/Transaction');
+const ActionLog = require('../model/ActionLog');
 router.use(require("../routes/query"))
 
 
@@ -70,19 +72,238 @@ router.use(require("../routes/query"))
 
 
 // ROUTINGS 
-router.get("/dashboard", (req, res) => {
-    if (!req.user) return res.redirect("/");
-    User.findById(req.user._id)
-        .populate("branch")
-        .then((user) => {
-            if (!user) return res.redirect("/");
-            res.render("index", { user });
-        })
-        .catch((err) => {
-            console.error("Error fetching user:", err);
-            res.status(500).send("Internal Server Error");
-        });
+router.get("/dashboard", async (req, res) => {
+  if (!req.user) return res.redirect("/");
+
+  try {
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/");
+
+    const branchId = user.branch?._id;
+    const selectedBranchId = req.query.branchId || branchId;
+    const sortFilter = req.query.sort;
+
+    // 🗓 Build date filter
+    let dateFilter = {};
+    if (sortFilter === 'today') {
+      const start = new Date(); start.setHours(0, 0, 0, 0);
+      const end = new Date(); end.setHours(23, 59, 59, 999);
+      dateFilter = { createdAt: { $gte: start, $lte: end } };
+    } else if (sortFilter === 'last7days') {
+      const lastWeek = new Date(); lastWeek.setDate(lastWeek.getDate() - 7);
+      dateFilter = { createdAt: { $gte: lastWeek } };
+    } else if (sortFilter === 'lastmonth') {
+      const lastMonth = new Date(); lastMonth.setMonth(lastMonth.getMonth() - 1);
+      dateFilter = { createdAt: { $gte: lastMonth } };
+    }
+
+    // 🟩 Fetch all data in parallel
+    const [
+      totalCustomers,
+      totalSuppliers,
+      totalProducts,
+      topCustomers,
+      topCategories,
+      recentSales,
+      recentPurchases,
+      recentExpenses,
+      totalSalesAmount,
+      totalCashSales,
+      totalCreditSales,
+      totalExpensesAmount,
+      totalStockValue,
+      pendingInvoices,
+      allBranches,
+      totalOrders,
+      lowStockProducts,
+      totalDebtRepayments,
+      totalLoan,
+      profitData,
+
+      // 🆕 Top selling products
+      topSellingProducts
+    ] = await Promise.all([
+      Customer.countDocuments({ branch: selectedBranchId }),
+      Supplier.countDocuments(),
+      Product.countDocuments({ branch: selectedBranchId }),
+
+      Customer.find({ branch: selectedBranchId }).limit(5),
+      Category.find({ branch: selectedBranchId }).limit(5),
+
+      Invoice.find({ branch: selectedBranchId, ...dateFilter }).sort({ createdAt: -1 }).limit(5),
+      SupplierInvoice.find({ branch: selectedBranchId, ...dateFilter }).sort({ createdAt: -1 }).limit(5),
+      Expense.find({ branch: selectedBranchId, ...dateFilter }).sort({ createdAt: -1 }).limit(5),
+
+      Invoice.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), ...dateFilter } },
+        { $group: { _id: null, total: { $sum: "$grand_total" } } }
+      ]),
+
+      Invoice.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), sales_type: "cash", ...dateFilter } },
+        { $group: { _id: null, total: { $sum: "$grand_total" } } }
+      ]),
+
+      Invoice.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), sales_type: "credit", ...dateFilter } },
+        { $group: { _id: null, total: { $sum: "$grand_total" } } }
+      ]),
+
+      Expense.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), ...dateFilter } },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ]),
+
+      Product.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId) } },
+        { $group: { _id: null, total: { $sum: "$totalInBaseUnit" } } }
+      ]),
+
+      SupplierInvoice.find({ branch: selectedBranchId, status: "Pending" }).limit(5),
+      Branch.find(),
+
+      Invoice.countDocuments({ branch: selectedBranchId, ...dateFilter }),
+
+      Product.aggregate([
+        {
+          $match: {
+            branch: new mongoose.Types.ObjectId(selectedBranchId),
+            ...(Object.keys(dateFilter).length > 0 ? dateFilter : {})
+          }
+        },
+        { $unwind: "$variants" },
+        {
+          $match: { $expr: { $lt: ["$variants.quantity", "$variants.lowStockAlert"] } }
+        },
+        {
+          $project: {
+            product: 1,
+            "variants.unitCode": 1,
+            "variants.quantity": 1,
+            "variants.lowStockAlert": 1
+          }
+        }
+      ]),
+
+      Transaction.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), transactionType: "Customer", ...dateFilter } },
+        { $group: { _id: null, total: { $sum: "$amountReceived" } } }
+      ]),
+
+      Loan.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId) } },
+        { $unwind: "$loans" },
+        { $group: { _id: null, total: { $sum: "$loans.loanAmount" } } }
+      ]),
+
+      Invoice.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), ...dateFilter } },
+        { $unwind: "$products" },
+        {
+          $lookup: {
+            from: "products",
+            localField: "products.product",
+            foreignField: "_id",
+            as: "productInfo"
+          }
+        },
+        { $unwind: "$productInfo" },
+        {
+          $project: {
+            quantity: "$products.quantity",
+            sellPrice: "$products.sellPrice",
+            supplierPrice: "$productInfo.supplierPrice",
+            profitPerItem: { $subtract: ["$products.sellPrice", "$productInfo.supplierPrice"] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalProfit: { $sum: { $multiply: ["$profitPerItem", "$quantity"] } }
+          }
+        }
+      ]),
+
+      // ✅ Fixed Top selling products: use correct image field
+      Invoice.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), ...dateFilter } },
+        { $unwind: "$products" },
+        {
+          $group: {
+            _id: "$products.product",
+            totalSold: { $sum: "$products.quantity" },
+            totalAmount: { $sum: { $multiply: ["$products.quantity", "$products.sellPrice"] } }
+          }
+        },
+        {
+          $lookup: {
+            from: "products",
+            localField: "_id",
+            foreignField: "_id",
+            as: "product"
+          }
+        },
+        { $unwind: "$product" },
+        {
+          $project: {
+            productName: "$product.product",
+            image: "$product.product_image",   // ✅ fixed field here
+            totalSold: 1,
+            totalAmount: 1
+          }
+        },
+        { $sort: { totalSold: -1 } },
+        { $limit: 5 }
+      ])
+    ]);
+
+    // 🧮 Compute totals safely
+    const totalSales = totalSalesAmount[0]?.total || 0;
+    const totalExpenses = totalExpensesAmount[0]?.total || 0;
+    const profit = profitData[0]?.totalProfit || 0;
+
+    const dashboardData = {
+      totalCustomers,
+      totalSuppliers,
+      totalProducts,
+      topCustomers,
+      topCategories,
+      recentSales,
+      recentPurchases,
+      recentExpenses,
+      totalSalesAmount: totalSales,
+      totalCashSales: totalCashSales[0]?.total || 0,
+      totalCreditSales: totalCreditSales[0]?.total || 0,
+      totalExpensesAmount: totalExpenses,
+      totalStockValue: totalStockValue[0]?.total || 0,
+      pendingInvoices,
+      allBranches,
+      selectedBranchId,
+      totalOrders,
+      lowStockProducts,
+      totalDebtRepayments: totalDebtRepayments[0]?.total || 0,
+      totalLoan: totalLoan[0]?.total || 0,
+      profit,
+      topSellingProducts
+    };
+
+    res.render("index", {
+      user,
+      dashboardData,
+      branches: allBranches,
+      currentSort: sortFilter,
+      selectedBranchId
+    });
+
+  } catch (err) {
+    console.error("Error loading dashboard:", err);
+    res.status(500).send("Internal Server Error");
+  }
 });
+
+
+
+
 
 // CUSTOMER ROUTE
 router.get("/customer", (req, res) => {
@@ -1204,6 +1425,7 @@ router.get("/adjustStock", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/");
 
   const selectedBranchId = req.query.branchId;
+  const currentSort = req.query.sort;
 
   try {
     const user = await User.findById(req.user._id).populate("branch");
@@ -1211,53 +1433,95 @@ router.get("/adjustStock", async (req, res) => {
 
     const units = await Unit.find();
 
+    let sortOption = { createdAt: -1 }; // default
+
+    if (currentSort === "ascending") sortOption = { createdAt: 1 };
+    else if (currentSort === "descending") sortOption = { createdAt: -1 };
+
     if (user.role === 'owner') {
       const allBranches = await Branch.find();
       const branchToUse = selectedBranchId || user.branch._id;
 
-      // 🟩 Find products in that branch
+      // get actual branch document
+      const branchDoc = allBranches.find(b => b._id.equals(branchToUse));
+
+      // get products in selected branch
       const products = await Product.find({ branch: branchToUse })
         .populate('category')
         .populate('branch');
 
-      // 🟩 Find recent stock adjustments in that branch
-      const adjustments = await StockAdjustment.find()
-        .where('product').in(products.map(p => p._id))
+      let adjustmentsQuery = StockAdjustment.find().where('product').in(products.map(p => p._id));
+
+      // Apply date filters
+      if (currentSort === "today") {
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        adjustmentsQuery = adjustmentsQuery.where('createdAt').gte(today);
+      } else if (currentSort === "lastMonth") {
+        const now = new Date();
+        const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        adjustmentsQuery = adjustmentsQuery.where('createdAt').gte(firstDayLastMonth).lte(lastDayLastMonth);
+      } else if (currentSort === "last7days") {
+        const last7days = new Date();
+        last7days.setDate(last7days.getDate() - 7);
+        adjustmentsQuery = adjustmentsQuery.where('createdAt').gte(last7days);
+      }
+
+      const adjustments = await adjustmentsQuery
         .populate('adjustedBy')
         .populate('product')
-        .sort({ createdAt: -1 })
-        .limit(20); // latest 20
+        .sort(sortOption)
+        .limit(20);
 
-      res.render("Product/stock-adjustment", {
+      return res.render("Product/stock-adjustment", {
         user,
-        ownerBranch: { branch: user.branch },
+        ownerBranch: { branch: branchDoc },  // ✅ use actual selected branch doc
         branches: allBranches,
         selectedBranchId: branchToUse,
         products,
         units,
-        adjustments
+        adjustments,
+        currentSort
       });
     } else {
-      // staff: only their branch
+      // staff: only own branch
       const products = await Product.find({ branch: user.branch._id })
         .populate('category')
         .populate('branch');
 
-      const adjustments = await StockAdjustment.find()
-        .where('product').in(products.map(p => p._id))
+      let adjustmentsQuery = StockAdjustment.find().where('product').in(products.map(p => p._id));
+
+      if (currentSort === "today") {
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        adjustmentsQuery = adjustmentsQuery.where('createdAt').gte(today);
+      } else if (currentSort === "lastMonth") {
+        const now = new Date();
+        const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        adjustmentsQuery = adjustmentsQuery.where('createdAt').gte(firstDayLastMonth).lte(lastDayLastMonth);
+      } else if (currentSort === "last7days") {
+        const last7days = new Date();
+        last7days.setDate(last7days.getDate() - 7);
+        adjustmentsQuery = adjustmentsQuery.where('createdAt').gte(last7days);
+      }
+
+      const adjustments = await adjustmentsQuery
         .populate('adjustedBy')
         .populate('product')
-        .sort({ createdAt: -1 })
+        .sort(sortOption)
         .limit(20);
 
-      res.render("Product/stock-adjustment", {
+      return res.render("Product/stock-adjustment", {
         user,
         ownerBranch: { branch: user.branch },
         branches: [user.branch],
         selectedBranchId: user.branch._id,
         products,
         units,
-        adjustments
+        adjustments,
+        currentSort
       });
     }
   } catch (err) {
@@ -1265,6 +1529,8 @@ router.get("/adjustStock", async (req, res) => {
     res.redirect("/error-404");
   }
 });
+
+
 
 router.post('/delete-stock-adjustment/:id', async (req, res, next) => {
   try {
@@ -1292,10 +1558,12 @@ router.get('/get-product/:id', async (req, res) => {
 router.post('/adjust-stock', async (req, res, next) => {
   try {
     const { product, unitCode, adjustQty, adjustmentType, notes } = req.body;
-    const branch = req.user ? req.user.branch : null;
-    const operator = req.user ? req.user._id : null;
+    const branchId = req.user?.branch;
+    const operator = req.user?._id;
 
-    if (!product || !unitCode || !adjustQty || !adjustmentType || !branch) {
+    console.log('Adjust stock request:', { product, unitCode, adjustQty, adjustmentType, branchId });
+
+    if (!product || !unitCode || !adjustQty || !adjustmentType || !branchId) {
       return res.status(400).send('Missing required fields.');
     }
 
@@ -1308,9 +1576,14 @@ router.post('/adjust-stock', async (req, res, next) => {
     if (!prod) return res.status(404).send('Product not found');
 
     const variants = prod.variants || [];
-    const targetVariant = variants.find(v => v.unitCode === unitCode[0]);
-    if (!targetVariant) return res.status(404).send('Variant not found');
+    const selectedUnitCode = Array.isArray(unitCode) ? unitCode[0] : unitCode;
 
+    const targetVariant = variants.find(v =>
+      (v.unitCode || '').trim().toUpperCase() === (selectedUnitCode || '').trim().toUpperCase()
+    );
+    if (!targetVariant) return res.status(404).send(`Variant not found: ${selectedUnitCode}`);
+
+    // adjust target variant qty
     let newTargetQty = targetVariant.quantity;
     if (adjustmentType === 'increase') {
       newTargetQty += adjustNum;
@@ -1322,6 +1595,7 @@ router.post('/adjust-stock', async (req, res, next) => {
     }
     targetVariant.quantity = newTargetQty;
 
+    // recalculate other variants based on totalInBaseUnit
     let newBaseQty;
     if (!targetVariant.totalInBaseUnit || targetVariant.totalInBaseUnit === 0) {
       newBaseQty = newTargetQty;
@@ -1339,19 +1613,44 @@ router.post('/adjust-stock', async (req, res, next) => {
 
     await prod.save();
 
-    await StockLedger.create({
+    // generate stock_ID like ADJ-BR-001
+    const branch = await Branch.findById(branchId);
+    if (!branch) return res.status(404).send('Branch not found');
+
+    const prefix = branch.branch_name.toUpperCase().slice(0, 2);
+    const stockPrefix = `ADJ-${prefix}-`;
+
+    const latestLedger = await StockLedger.findOne({ stock_ID: { $regex: `^${stockPrefix}` } })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const nextNumber = latestLedger?.stock_ID?.match(/\d+$/)
+      ? parseInt(latestLedger.stock_ID.match(/\d+$/)[0]) + 1
+      : 1;
+
+    const generatedStockID = `${stockPrefix}${String(nextNumber).padStart(3, '0')}`;
+
+    console.log('Creating StockLedger with stock_ID:', generatedStockID);
+
+    // create StockLedger and save notes in `customer` field
+    const ledgerDoc = await StockLedger.create({
       date: new Date(),
       product: prod._id,
+      branch: branchId,
+      operator,
+      particular: 'Adjustment',
+      stock_ID: generatedStockID,
+      customer: notes || '',   // ✅ save notes in customer field
       variants: variants.map(v => ({
         unitCode: v.unitCode,
-        stock_in: adjustmentType === 'increase' && v.unitCode === unit ? adjustNum : 0,
-        stock_out: adjustmentType === 'decrease' && v.unitCode === unit ? adjustNum : 0,
+        stock_in: adjustmentType === 'increase' && v.unitCode === selectedUnitCode ? adjustNum : 0,
+        stock_out: adjustmentType === 'decrease' && v.unitCode === selectedUnitCode ? adjustNum : 0,
         balance: v.quantity
       })),
-      notes,
-      operator,
-      branch
+      notes: notes || ''
     });
+
+    console.log('StockLedger created successfully:', ledgerDoc._id);
 
     await StockAdjustment.create({
       product: prod._id,
@@ -1359,7 +1658,7 @@ router.post('/adjust-stock', async (req, res, next) => {
       notes,
       variants: [
         {
-          unitCode: unitCode[0],
+          unitCode: selectedUnitCode,
           adjustmentType,
           quantity: adjustNum
         }
@@ -1368,10 +1667,14 @@ router.post('/adjust-stock', async (req, res, next) => {
 
     res.redirect('/adjustStock');
   } catch (err) {
-    console.error('Error adjusting stock:', err);
+    console.error('❌ Error adjusting stock:', err);
     next(err);
   }
 });
+
+
+
+
 
 
 
@@ -1502,66 +1805,78 @@ router.post('/delete-price-adjustment/:id', async (req, res, next) => {
 });
 
 
-router.get("/stockTransfer", (req, res) => {
+router.get("/stockTransfer", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/");
 
   const selectedBranchId = req.query.branchId;
+  const currentSort = req.query.sort;
 
-  User.findById(req.user._id)
-    .populate("branch")
-    .then(user => {
-      if (!user) return res.redirect("/");
+  try {
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/");
 
-      Branch.find()
-        .then(allBranches => {
-          const userBranchId = user.branch._id;
-          const branchToFilter = selectedBranchId || userBranchId;
+    const allBranches = await Branch.find();
+    const branchToUse = selectedBranchId || user.branch._id;
 
-          Product.find({ branch: branchToFilter })
-            .populate('variants.supplier')
-            .populate('branch')
-            .then(products => {
-              // Only fetch transfers where user's branch is involved
-              TransferStock.find({
-                $or: [
-                  { branch_from: userBranchId },
-                  { branch_to: userBranchId }
-                ]
-              })
-                .populate("branch_from")
-                .populate("branch_to")
-                .populate("product")
-                .sort({ date: -1 })
-                .then(transfers => {
-                  res.render("Product/stockTransfer", {
-                    user,
-                    ownerBranch: { branch: user.branch },
-                    branches: allBranches,
-                    selectedBranchId: branchToFilter,
-                    products,
-                    transfers
-                  });
-                })
-                .catch(err => {
-                  console.error("Error fetching transfers:", err);
-                  res.status(500).send("Error fetching transfers.");
-                });
-            })
-            .catch(productErr => {
-              console.error(productErr);
-              res.status(500).send("Error fetching products.");
-            });
-        })
-        .catch(branchErr => {
-          console.error(branchErr);
-          res.status(500).send("Error fetching branches.");
-        });
+    // get actual branch doc to show correct name
+    const branchDoc = allBranches.find(b => b._id.equals(branchToUse));
+
+    // get products for selected branch
+    const products = await Product.find({ branch: branchToUse })
+      .populate('variants.supplier')
+      .populate('branch');
+
+    // sort option
+    let sortOption = { date: -1 }; // default
+    if (currentSort === "ascending") sortOption = { date: 1 };
+    else if (currentSort === "descending") sortOption = { date: -1 };
+
+    // date filter
+    let dateFilter = {};
+    if (currentSort === "today") {
+      const today = new Date(); today.setHours(0,0,0,0);
+      dateFilter.date = { $gte: today };
+    } else if (currentSort === "lastMonth") {
+      const now = new Date();
+      const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      dateFilter.date = { $gte: firstDayLastMonth, $lte: lastDayLastMonth };
+    } else if (currentSort === "last7days") {
+      const last7days = new Date();
+      last7days.setDate(last7days.getDate() - 7);
+      dateFilter.date = { $gte: last7days };
+    }
+
+    // find transfers where selected branch is involved
+    const transfers = await TransferStock.find({
+      $and: [
+        { $or: [
+          { branch_from: branchToUse },
+          { branch_to: branchToUse }
+        ] },
+        dateFilter
+      ]
     })
-    .catch(err => {
-      console.error(err);
-      res.status(500).send("Error finding user.");
+      .populate("branch_from")
+      .populate("branch_to")
+      .populate("product")
+      .sort(sortOption);
+
+    res.render("Product/stockTransfer", {
+      user,
+      ownerBranch: { branch: branchDoc },
+      branches: allBranches,
+      selectedBranchId: branchToUse,
+      products,
+      transfers,
+      currentSort
     });
+  } catch (err) {
+    console.error("Error loading stockTransfer page:", err);
+    res.status(500).send("Server error.");
+  }
 });
+
 
 
 router.get('/api/branch-products/:branchId', async (req, res) => {
@@ -1581,125 +1896,438 @@ router.post('/stock-transfer', async (req, res, next) => {
   const {
     branch_from,
     branch_to,
-    product,
-    unitCode,
-    quantity,
-    sellPrice,
-    transferQTY,
+    product,        // array
+    unitCode,       // array
+    transferQTY,    // array
     invoice_number,
-    payment_date
+    payment_date,
+    notes
   } = req.body;
 
-  const transferQty = parseFloat(transferQTY);
-  const unit = unitCode[0];
-  const receivingBranch = branch_to;
   const sendingBranch = branch_from;
+  const receivingBranch = branch_to;
   const userId = req.user._id;
 
   try {
-    const sourceProduct = await Product.findOne({ product, branch: sendingBranch });
-    if (!sourceProduct) throw new Error('Product not found in source branch');
+    const receivingBranchDoc = await Branch.findById(receivingBranch);
+    if (!receivingBranchDoc) throw new Error('Receiving branch not found');
+    const receivingBranchName = receivingBranchDoc.branch_name || '';
 
-    const variantIndex = sourceProduct.variants.findIndex(v => v.unitCode === unit);
-    if (variantIndex === -1) throw new Error(`Unit ${unit} not found in source product`);
+    // Loop through all products
+    for (let i = 0; i < product.length; i++) {
+      const prodName = product[i];
+      const unit = unitCode[i];
+      const qty = parseFloat(transferQTY[i]);
+      if (!prodName || !unit || !qty || qty <= 0) continue;
 
-    let receivingProduct = await Product.findOne({ product, branch: receivingBranch });
+      // Find source product
+      const sourceProduct = await Product.findOne({ product: prodName, branch: sendingBranch });
+      if (!sourceProduct) throw new Error(`Product '${prodName}' not found in source branch`);
 
-    if (!receivingProduct) {
+      const variantIndex = sourceProduct.variants.findIndex(v => v.unitCode === unit);
+      if (variantIndex === -1) throw new Error(`Unit ${unit} not found in source product`);
 
-      const clonedVariants = JSON.parse(JSON.stringify(sourceProduct.variants));
+      // Find or create receiving product
+      let receivingProduct = await Product.findOne({ product: prodName, branch: receivingBranch });
 
-      const baseQty = transferQty;
-      for (let i = 0; i < clonedVariants.length; i++) {
-        if (clonedVariants[i].unitCode === unit) {
-          clonedVariants[i].quantity = baseQty;
-        } else {
-          clonedVariants[i].quantity = baseQty * (clonedVariants[i].totalInBaseUnit || 0);
+      if (!receivingProduct) {
+        const clonedVariants = JSON.parse(JSON.stringify(sourceProduct.variants));
+        for (let v of clonedVariants) {
+          v.quantity = v.unitCode === unit 
+            ? qty 
+            : qty * (v.totalInBaseUnit || 0);
+        }
+
+        receivingProduct = await Product.create({
+          product: sourceProduct.product,
+          category: sourceProduct.category,
+          branch: receivingBranch,
+          product_detail: sourceProduct.product_detail,
+          mfgDate: sourceProduct.mfgDate,
+          expDate: sourceProduct.expDate,
+          product_image: sourceProduct.product_image,
+          supplierPrice: sourceProduct.supplierPrice,
+          variants: clonedVariants
+        });
+
+        await Branch.findByIdAndUpdate(receivingBranch, { $addToSet: { stock: receivingProduct._id } });
+      } else {
+        // Update receiving product quantities
+        const receivingVariantIndex = receivingProduct.variants.findIndex(v => v.unitCode === unit);
+        if (receivingVariantIndex === -1) throw new Error('Unit not found in receiving product');
+
+        receivingProduct.variants[receivingVariantIndex].quantity += qty;
+
+        const newBaseQty = receivingProduct.variants[receivingVariantIndex].quantity;
+        for (let j = 0; j < receivingProduct.variants.length; j++) {
+          if (j !== receivingVariantIndex) {
+            receivingProduct.variants[j].quantity = newBaseQty * (receivingProduct.variants[j].totalInBaseUnit || 0);
+          }
+        }
+
+        await receivingProduct.save();
+      }
+
+      // Deduct from source
+      sourceProduct.variants[variantIndex].quantity -= qty;
+      if (sourceProduct.variants[variantIndex].quantity < 0) {
+        return res.status(400).json({ error: `Insufficient quantity for product '${prodName}' in source branch.` });
+      }
+
+      const updatedQty = sourceProduct.variants[variantIndex].quantity;
+      for (let j = 0; j < sourceProduct.variants.length; j++) {
+        if (j !== variantIndex) {
+          sourceProduct.variants[j].quantity = updatedQty * (sourceProduct.variants[j].totalInBaseUnit || 0);
         }
       }
 
-      receivingProduct = await Product.create({
-        product: sourceProduct.product,
-        category: sourceProduct.category,
-        branch: receivingBranch,
-        product_detail: sourceProduct.product_detail,
-        mfgDate: sourceProduct.mfgDate,
-        expDate: sourceProduct.expDate,
-        product_image: sourceProduct.product_image,
-        supplierPrice: sourceProduct.supplierPrice,
-        variants: clonedVariants
-      });
+      await sourceProduct.save();
 
-      await Branch.findByIdAndUpdate(receivingBranch, {
-        $addToSet: { stock: receivingProduct._id }
-      });
-    } else {
-      const receivingVariantIndex = receivingProduct.variants.findIndex(v => v.unitCode === unit);
-      if (receivingVariantIndex === -1) throw new Error('Unit not found in receiving product');
+      // Find latest ledger balances
+      const getLatestLedgerBalances = async (productId, branchId) => {
+        const lastLedger = await StockLedger.findOne({ product: productId, branch: branchId }).sort({ date: -1 });
+        if (lastLedger) {
+          return lastLedger.variants.reduce((map, v) => {
+            map[v.unitCode] = { cost_price: v.cost_price || 0, total_sales: v.total_sales || 0 };
+            return map;
+          }, {});
+        }
+        return {};
+      };
 
-      receivingProduct.variants[receivingVariantIndex].quantity += transferQty;
+      const sourceBalances = await getLatestLedgerBalances(sourceProduct._id, sendingBranch);
+      const receivingBalances = await getLatestLedgerBalances(receivingProduct._id, receivingBranch);
 
-      const newBaseQty = receivingProduct.variants[receivingVariantIndex].quantity;
-      for (let i = 0; i < receivingProduct.variants.length; i++) {
-        if (i === receivingVariantIndex) continue;
-        const factor = receivingProduct.variants[i].totalInBaseUnit || 0;
-        receivingProduct.variants[i].quantity = newBaseQty * factor;
-      }
+      // Create ledger entries
+      const createLedgerEntry = async (branch, type, productDoc, qtyChange, balances, customer) => {
+        return StockLedger.create({
+          date: new Date(payment_date),
+          product: productDoc._id,
+          operator: userId,
+          branch,
+          particular: "Transfer",
+          stock_ID: invoice_number,
+          customer,
+          variants: productDoc.variants.map(v => ({
+            unitCode: v.unitCode,
+            stock_in: type === 'in' && v.unitCode === unit ? qtyChange : 0,
+            stock_out: type === 'out' && v.unitCode === unit ? qtyChange : 0,
+            balance: v.quantity,
+            cost_price: balances[v.unitCode]?.cost_price || 0,
+            total_sales: balances[v.unitCode]?.total_sales || 0
+          }))
+        });
+      };
 
-      await receivingProduct.save();
-    }
+      await createLedgerEntry(sendingBranch, 'out', sourceProduct, qty, sourceBalances, receivingBranchName);
+      await createLedgerEntry(receivingBranch, 'in', receivingProduct, qty, receivingBalances, receivingBranchName);
 
-    sourceProduct.variants[variantIndex].quantity -= transferQty;
-    if (sourceProduct.variants[variantIndex].quantity < 0) {
-      return res.status(400).json({ error: 'Insufficient quantity in source branch.' });
-    }
-
-    const updatedQty = sourceProduct.variants[variantIndex].quantity;
-
-    for (let i = 0; i < sourceProduct.variants.length; i++) {
-      if (i === variantIndex) continue;
-      const factor = sourceProduct.variants[i].totalInBaseUnit || 0;
-      sourceProduct.variants[i].quantity = updatedQty * factor;
-    }
-
-    await sourceProduct.save();
-
-    const createLedgerEntry = async (branch, type, productDoc, qtyChange) => {
-      return StockLedger.create({
+      // Save transfer record
+      await TransferStock.create({
+        branch_from: sendingBranch,
+        branch_to: receivingBranch,
+        product: sourceProduct._id,
+        unitCode: unit,
+        quantity: qty,
+        invoice_number,
         date: new Date(payment_date),
-        product: productDoc._id,
-        operator: userId,
-        branch,
-        variants: productDoc.variants.map(v => ({
-          unitCode: v.unitCode,
-          stock_in: type === 'in' && v.unitCode === unit ? qtyChange : 0,
-          stock_out: type === 'out' && v.unitCode === unit ? qtyChange : 0,
-          balance: v.quantity
-        }))
+        notes: notes || '',
+        createdBy: userId
       });
-    };
+    }
 
-    await createLedgerEntry(sendingBranch, 'out', sourceProduct, transferQty);
-    await createLedgerEntry(receivingBranch, 'in', receivingProduct, transferQty);
-
-    await TransferStock.create({
-      branch_from: sendingBranch,
-      branch_to: receivingBranch,
-      product: sourceProduct._id,
-      unitCode: unit,
-      quantity: transferQty,
-      invoice_number,
-      date: new Date(payment_date),
-      createdBy: userId
-    });
-
-    res.redirect('/stockTransfer');                                     
+    res.redirect('/stockTransfer');
   } catch (err) {
     console.error('Transfer stock error:', err);
     next(err);
   }
 });
 
+
+
+
+router.post('/edit-transfer', async (req, res, next) => {
+  const {
+    transferId,
+    branch_from,
+    branch_to,
+    product,           // product ObjectId
+    unitCode,          // e.g., "pcs"
+    quantity,          // new quantity entered by user
+    invoice_number,
+    date,
+    notes
+  } = req.body;
+
+  const userId = req.user._id;
+  const newQty = parseFloat(quantity);
+  const oldUnit = unitCode;
+
+  try {
+    // Find old transfer
+    const oldTransfer = await TransferStock.findById(transferId);
+    if (!oldTransfer) throw new Error('Transfer record not found');
+
+    const oldQty = oldTransfer.quantity;
+
+    // Find receiving branch name
+    const receivingBranchDoc = await Branch.findById(branch_to);
+    if (!receivingBranchDoc) throw new Error('Receiving branch not found');
+    const receivingBranchName = receivingBranchDoc.branch_name || '';
+
+    // Find products
+    const sourceProduct = await Product.findOne({ _id: oldTransfer.product, branch: branch_from });
+    if (!sourceProduct) throw new Error('Source product not found');
+
+    const receivingProduct = await Product.findOne({ product: sourceProduct.product, branch: branch_to });
+    if (!receivingProduct) throw new Error('Receiving product not found');
+
+    // Variant indexes
+    const variantIndex = sourceProduct.variants.findIndex(v => v.unitCode === oldUnit);
+    if (variantIndex === -1) throw new Error(`Unit ${oldUnit} not found in source product`);
+
+    const receivingVariantIndex = receivingProduct.variants.findIndex(v => v.unitCode === oldUnit);
+    if (receivingVariantIndex === -1) throw new Error(`Unit ${oldUnit} not found in receiving product`);
+
+    // Difference
+    const qtyDiff = newQty - oldQty;
+
+    if (qtyDiff !== 0) {
+      const absDiff = Math.abs(qtyDiff);
+
+      if (qtyDiff > 0) {
+        // New qty > old → transfer extra
+        sourceProduct.variants[variantIndex].quantity -= absDiff;
+        if (sourceProduct.variants[variantIndex].quantity < 0) throw new Error('Insufficient stock in source branch');
+        receivingProduct.variants[receivingVariantIndex].quantity += absDiff;
+      } else {
+        // New qty < old → return excess
+        sourceProduct.variants[variantIndex].quantity += absDiff;
+        receivingProduct.variants[receivingVariantIndex].quantity -= absDiff;
+        if (receivingProduct.variants[receivingVariantIndex].quantity < 0) throw new Error('Negative stock in receiving branch');
+      }
+
+      // Recalculate proportional quantities (source)
+      const updatedSourceBaseQty = sourceProduct.variants[variantIndex].quantity;
+      sourceProduct.variants.forEach((v, i) => {
+        if (i !== variantIndex) v.quantity = updatedSourceBaseQty * (v.totalInBaseUnit || 0);
+      });
+
+      // Recalculate proportional quantities (receiving)
+      const updatedReceivingBaseQty = receivingProduct.variants[receivingVariantIndex].quantity;
+      receivingProduct.variants.forEach((v, i) => {
+        if (i !== receivingVariantIndex) v.quantity = updatedReceivingBaseQty * (v.totalInBaseUnit || 0);
+      });
+
+      // Save changes
+      await sourceProduct.save();
+      await receivingProduct.save();
+
+      // Ledger common fields
+      const commonData = {
+        date: new Date(date),
+        operator: userId,
+        particular: 'Transfer',
+        stock_ID: 'edit',
+        customer: receivingBranchName
+      };
+
+      if (qtyDiff > 0) {
+        // extra transfer
+        await StockLedger.create({
+          ...commonData,
+          product: sourceProduct._id,
+          branch: branch_from,
+          variants: sourceProduct.variants.map(v => ({
+            unitCode: v.unitCode,
+            stock_in: 0,
+            stock_out: v.unitCode === oldUnit ? absDiff : 0,
+            balance: v.quantity,
+            cost_price: v.cost_price || 0,
+            total_sales: 0
+          }))
+        });
+        await StockLedger.create({
+          ...commonData,
+          product: receivingProduct._id,
+          branch: branch_to,
+          variants: receivingProduct.variants.map(v => ({
+            unitCode: v.unitCode,
+            stock_in: v.unitCode === oldUnit ? absDiff : 0,
+            stock_out: 0,
+            balance: v.quantity,
+            cost_price: v.cost_price || 0,
+            total_sales: 0
+          }))
+        });
+      } else {
+        // reduced transfer
+        await StockLedger.create({
+          ...commonData,
+          product: sourceProduct._id,
+          branch: branch_from,
+          variants: sourceProduct.variants.map(v => ({
+            unitCode: v.unitCode,
+            stock_in: v.unitCode === oldUnit ? absDiff : 0,
+            stock_out: 0,
+            balance: v.quantity,
+            cost_price: v.cost_price || 0,
+            total_sales: 0
+          }))
+        });
+        await StockLedger.create({
+          ...commonData,
+          product: receivingProduct._id,
+          branch: branch_to,
+          variants: receivingProduct.variants.map(v => ({
+            unitCode: v.unitCode,
+            stock_in: 0,
+            stock_out: v.unitCode === oldUnit ? absDiff : 0,
+            balance: v.quantity,
+            cost_price: v.cost_price || 0,
+            total_sales: 0
+          }))
+        });
+      }
+    }
+
+    // Update transfer record
+    oldTransfer.quantity = newQty;
+    oldTransfer.invoice_number = invoice_number;
+    oldTransfer.date = new Date(date);
+    oldTransfer.notes = notes || '';
+    await oldTransfer.save();
+
+    // Action log
+    await ActionLog.create({
+      action: 'edit',
+      operator: userId,
+      branch: branch_from,
+      particulars: `Edited transfer #${oldTransfer.invoice_number}`,
+      targetModel: 'TransferStock',
+      targetId: oldTransfer._id,
+      before: { quantity: oldQty },
+      after: { quantity: newQty }
+    });
+
+    res.redirect('/stockTransfer');
+  } catch (err) {
+    console.error('Edit transfer error:', err);
+    next(err);
+  }
+});
+
+router.post('/delete-transfer', async (req, res, next) => {
+  const { transferId } = req.body;
+  const userId = req.user._id;
+
+  try {
+    const transfer = await TransferStock.findById(transferId);
+    if (!transfer) throw new Error('Transfer not found');
+
+    const { branch_from, branch_to, product, unitCode, quantity, invoice_number } = transfer;
+
+    const oldQty = quantity;
+
+    // Get receiving branch name for ledger customer field
+    const receivingBranchDoc = await Branch.findById(branch_to);
+    const receivingBranchName = receivingBranchDoc ? receivingBranchDoc.branch_name : '';
+
+    // Find products
+    const sourceProduct = await Product.findOne({ _id: product, branch: branch_from });
+    if (!sourceProduct) throw new Error('Source product not found');
+
+    const receivingProduct = await Product.findOne({ product: sourceProduct.product, branch: branch_to });
+    if (!receivingProduct) throw new Error('Receiving product not found');
+
+    const variantIndex = sourceProduct.variants.findIndex(v => v.unitCode === unitCode);
+    if (variantIndex === -1) throw new Error(`Unit ${unitCode} not found in source product`);
+
+    const receivingVariantIndex = receivingProduct.variants.findIndex(v => v.unitCode === unitCode);
+    if (receivingVariantIndex === -1) throw new Error(`Unit ${unitCode} not found in receiving product`);
+
+    // Reverse transfer:
+    // Add back to source
+    sourceProduct.variants[variantIndex].quantity += oldQty;
+
+    // Deduct from receiving
+    receivingProduct.variants[receivingVariantIndex].quantity -= oldQty;
+    if (receivingProduct.variants[receivingVariantIndex].quantity < 0) throw new Error('Negative stock after reversal');
+
+    // Recalculate proportional quantities
+    const updatedSourceBaseQty = sourceProduct.variants[variantIndex].quantity;
+    sourceProduct.variants.forEach((v, i) => {
+      if (i !== variantIndex) v.quantity = updatedSourceBaseQty * (v.totalInBaseUnit || 0);
+    });
+
+    const updatedReceivingBaseQty = receivingProduct.variants[receivingVariantIndex].quantity;
+    receivingProduct.variants.forEach((v, i) => {
+      if (i !== receivingVariantIndex) v.quantity = updatedReceivingBaseQty * (v.totalInBaseUnit || 0);
+    });
+
+    await sourceProduct.save();
+    await receivingProduct.save();
+
+    // Add ledger entries:
+    const commonData = {
+      date: new Date(),
+      operator: userId,
+      particular: 'Delete Transfer',
+      stock_ID: invoice_number,
+      customer: receivingBranchName
+    };
+
+    // Source: add back → stock_in
+    await StockLedger.create({
+      ...commonData,
+      product: sourceProduct._id,
+      branch: branch_from,
+      variants: sourceProduct.variants.map(v => ({
+        unitCode: v.unitCode,
+        stock_in: v.unitCode === unitCode ? oldQty : 0,
+        stock_out: 0,
+        balance: v.quantity,
+        cost_price: v.cost_price || 0,
+        total_sales: 0
+      }))
+    });
+
+    // Receiving: deduct → stock_out
+    await StockLedger.create({
+      ...commonData,
+      product: receivingProduct._id,
+      branch: branch_to,
+      variants: receivingProduct.variants.map(v => ({
+        unitCode: v.unitCode,
+        stock_in: 0,
+        stock_out: v.unitCode === unitCode ? oldQty : 0,
+        balance: v.quantity,
+        cost_price: v.cost_price || 0,
+        total_sales: 0
+      }))
+    });
+
+    // Remove the transfer record
+    await transfer.deleteOne();
+
+    // Action log
+    await ActionLog.create({
+      action: 'delete',
+      operator: userId,
+      branch: branch_from,
+      particulars: `Deleted transfer #${invoice_number}`,
+      targetModel: 'TransferStock',
+      targetId: transferId,
+      before: { quantity: oldQty },
+      after: null
+    });
+
+    res.redirect('/stockTransfer');
+  } catch (err) {
+    console.error('Delete transfer error:', err);
+    next(err);
+  }
+});
 
 
 
@@ -1772,7 +2400,7 @@ router.get("/purchase-stock", (req, res) => {
     });
 });
 
-router.post('/addReceiveStock', (req, res, next) => {
+router.post('/addReceiveStock', async (req, res, next) => {
   const {
     invoice_number,
     supplier,
@@ -1786,10 +2414,7 @@ router.post('/addReceiveStock', (req, res, next) => {
     item_rate
   } = req.body;
 
-  const items = [];
-  let grandTotal = 0;
-
-  const wrapAsArray = (val) => (Array.isArray(val) ? val : [val]);
+  const wrapAsArray = val => (Array.isArray(val) ? val : [val]);
 
   const names = wrapAsArray(item_name);
   const ids = wrapAsArray(product_id);
@@ -1798,99 +2423,441 @@ router.post('/addReceiveStock', (req, res, next) => {
   const rates = wrapAsArray(item_rate);
 
   const branch = req.user ? req.user.branch : null;
+  if (!branch) return res.status(400).send('Branch information is required.');
 
-  if (!branch) {
-    return res.status(400).send('Branch information is required.');
-  }
+  try {
+    // === Fetch supplier document first ===
+    const supplierDoc = await Supplier.findById(supplier);
+    if (!supplierDoc) return res.status(404).send('Supplier not found');
 
-  let currentIndex = 0;
-
-  function processNextProduct() {
-    if (currentIndex >= names.length) {
-      return ReceivedStock.create({
-        invoice_number,
-        supplier,
-        branch,
-        payment_date,
-        items,
-        grand_total: grandTotal,
-        paid_amount,
-        due_amount: grandTotal - paid_amount,
-        payment_status
-      })
-        .then(() => {
-          res.redirect('/purchase-stock');
-        })
-        .catch(err => {
-          next(err);
+    // === Filter out empty product rows ===
+    const filtered = [];
+    for (let i = 0; i < names.length; i++) {
+      if (
+        ids[i] && ids[i].trim() !== '' &&
+        units[i] && units[i].trim() !== '' &&
+        qtys[i] && parseFloat(qtys[i]) > 0 &&
+        rates[i] && parseFloat(rates[i]) > 0
+      ) {
+        filtered.push({
+          name: names[i],
+          id: ids[i],
+          unit: units[i],
+          qty: parseFloat(qtys[i]),
+          rate: parseFloat(rates[i])
         });
+      }
     }
 
-    const qtyNum = parseFloat(qtys[currentIndex]);
-    const rateNum = parseFloat(rates[currentIndex]);
-    const total = qtyNum * rateNum;
-    grandTotal += total;
+    if (filtered.length === 0) return res.status(400).send('No valid product items submitted.');
 
-    items.push({
-      product: ids[currentIndex],
-      item_name: names[currentIndex],
-      unitCode: units[currentIndex],
-      item_qty: qtyNum,
-      item_rate: rateNum,
-      item_total: total
+    const items = [];
+    let grandTotal = 0;
+
+    for (const productData of filtered) {
+      const total = productData.qty * productData.rate;
+      grandTotal += total;
+
+      items.push({
+        product: productData.id,
+        item_name: productData.name,
+        unitCode: productData.unit,
+        item_qty: productData.qty,
+        item_rate: productData.rate,
+        item_total: total
+      });
+
+      const product = await Product.findById(productData.id);
+      if (!product || !product.variants || product.variants.length === 0) continue;
+
+      const baseIndex = product.variants.findIndex(v => v.unitCode === productData.unit);
+      if (baseIndex === -1) continue;
+
+      // increase stock
+      product.variants[baseIndex].quantity += productData.qty;
+      product.supplierPrice = productData.rate;
+
+      const baseQty = product.variants[baseIndex].quantity;
+
+      // recalculate others
+      for (let j = 0; j < product.variants.length; j++) {
+        if (j !== baseIndex) {
+          product.variants[j].quantity = baseQty * product.variants[j].totalInBaseUnit;
+        }
+      }
+
+      await product.save();
+
+      // create ledger
+      await StockLedger.create({
+        date: new Date(payment_date),
+        product: product._id,
+        operator: req.user._id,
+        branch,
+        particular: 'Purchase',
+        stock_ID: invoice_number,
+        customer: supplierDoc.supplier,    // supplier name
+        variants: product.variants.map(variant => ({
+          unitCode: variant.unitCode,
+          stock_in: variant.unitCode === productData.unit ? productData.qty : 0,
+          stock_out: 0,
+          balance: variant.quantity,
+          cost_price: productData.rate,
+          total_sales: 0
+        }))
+      });
+    }
+
+    // save purchase
+    await ReceivedStock.create({
+      invoice_number,
+      supplier,
+      branch,
+      operator: req.user._id,
+      payment_date,
+      items,
+      grand_total: grandTotal,
+      paid_amount,
+      due_amount: grandTotal - paid_amount,
+      payment_status
     });
 
-    Product.findById(ids[currentIndex])
-      .then(product => {
-        if (!product || !product.variants || product.variants.length === 0) return;
+    res.redirect('/purchase-stock');
 
-        const variants = product.variants;
-        const baseIndex = variants.findIndex(v => v.unitCode === units[currentIndex]);
-        if (baseIndex === -1) return;
+  } catch (err) {
+    console.error('Error adding ReceiveStock:', err);
+    next(err);
+  }
+});
 
-        // Update the quantity of the base unit
-        variants[baseIndex].quantity += qtyNum;
-        product.supplierPrice = rateNum;
+router.get("/managePurchase", (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
 
-        const baseQty = variants[baseIndex].quantity;
+  const selectedBranchId = req.query.branchId;
+  const sortParam = req.query.sort || "recently";  // default sort
 
-        // Recalculate other variant quantities
-        for (let j = 0; j < variants.length; j++) {
-          if (j === baseIndex) continue;
-          const factor = variants[j].totalInBaseUnit;
-          variants[j].quantity = baseQty * factor;
-        }
+  let sortQuery = { created_at: -1 }; // default sort: recently added
 
-        return product.save().then(saved => {
-          // Create a single StockLedger entry per product
-          const ledgerEntry = {
-            date: new Date(payment_date),
-            product: saved._id,
-            variants: variants.map(variant => ({
-              unitCode: variant.unitCode,
-              stock_in: variant.unitCode === units[currentIndex] ? qtyNum : 0,
-              stock_out: 0,
-              balance: variant.quantity
-            })),
-            operator: req.user._id,
-            branch
-          };
+  // build date filters if needed
+  let dateFilter = null;
 
-          return StockLedger.create(ledgerEntry);
-        });
-      })
-      .then(() => {
-        currentIndex++;
-        processNextProduct();
-      })
-      .catch(err => {
-        console.error('Error updating product or ledger:', err);
-        next(err);
-      });
+  if (sortParam === "today") {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    dateFilter = { $gte: today };
+    sortQuery = null;
+  } else if (sortParam === "lastMonth") {
+    const lastMonth = new Date();
+    lastMonth.setMonth(lastMonth.getMonth() - 1);
+    dateFilter = { $gte: lastMonth };
+    sortQuery = null;
+  } else if (sortParam === "last7days") {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    dateFilter = { $gte: sevenDaysAgo };
+    sortQuery = null;
+  } else if (sortParam === "ascending") {
+    sortQuery = { created_at: 1 };
+  } else if (sortParam === "descending") {
+    sortQuery = { created_at: -1 };
   }
 
-  processNextProduct();
+  User.findById(req.user._id)
+    .populate("branch")
+    .then(user => {
+      if (!user) return res.redirect("/");
+
+      const branchToFilter = selectedBranchId || user.branch._id;
+      let stockQuery = { branch: branchToFilter };
+      if (dateFilter) {
+        stockQuery.created_at = dateFilter;
+      }
+
+      let fetchStock = ReceivedStock.find(stockQuery)
+        .populate('supplier branch operator');
+
+      if (sortQuery) {
+        fetchStock = fetchStock.sort(sortQuery);
+      }
+
+      if (user.role === 'owner') {
+        Branch.find().then(allBranches => {
+          Promise.all([
+            fetchStock,
+            Supplier.find().populate('supplierInvoice'),
+            Branch.findById(branchToFilter)
+          ])
+            .then(([stock, suppliers, ownerBranch]) => {
+              res.render("PurchaseStock/manage-purchase", {
+                user,
+                ownerBranch: { branch: ownerBranch },
+                branches: allBranches,
+                selectedBranchId: branchToFilter,
+                stock,
+                suppliers,
+                currentSort: sortParam
+              });
+            })
+            .catch(err => {
+              console.error("Error fetching stock/suppliers:", err);
+              res.redirect("/error-404");
+            });
+        });
+      } else {
+        Promise.all([
+          fetchStock,
+          Supplier.find().populate('supplierInvoice')
+        ])
+          .then(([stock, suppliers]) => {
+            res.render("PurchaseStock/manage-purchase", {
+              user,
+              ownerBranch: { branch: user.branch },
+              branches: [user.branch],
+              selectedBranchId: user.branch._id,
+              stock,
+              suppliers,
+              currentSort: sortParam
+            });
+          })
+          .catch(err => {
+            console.error("Error fetching stock/suppliers:", err);
+            res.redirect("/error-404");
+          });
+      }
+    })
+    .catch(err => {
+      console.error("Error fetching user:", err);
+      res.redirect("/error-404");
+    });
 });
+
+
+
+
+
+
+router.post('/updateReceiveStock', async (req, res, next) => {
+  try {
+    const {
+      invoice_number,
+      supplier,
+      payment_date,
+      paid_amount,
+      item_name,
+      product_id,
+      unitCode,
+      item_qty,
+      item_rate
+    } = req.body;
+
+    const branch = req.user?.branch;
+    const operator = req.user?._id;
+
+    if (!branch || !invoice_number) {
+      return res.status(400).send('Missing branch or invoice number.');
+    }
+
+    // Fetch supplier document
+    const supplierDoc = await Supplier.findById(supplier);
+    if (!supplierDoc) return res.status(404).send('Supplier not found.');
+
+    // Convert fields to arrays safely
+    const names = Array.isArray(item_name) ? item_name : [item_name];
+    const ids = Array.isArray(product_id) ? product_id : [product_id];
+    const units = Array.isArray(unitCode) ? unitCode : [unitCode];
+    const qtys = Array.isArray(item_qty) ? item_qty : [item_qty];
+    const rates = Array.isArray(item_rate) ? item_rate : [item_rate];
+
+    let grandTotal = 0;
+    const updatedItems = [];
+
+    // Find original ReceivedStock
+    const originalStock = await ReceivedStock.findOne({ invoice_number }).lean(); // use .lean() to get plain object
+    if (!originalStock) return res.status(404).send('Original purchase not found.');
+
+    for (let i = 0; i < names.length; i++) {
+      const product = await Product.findById(ids[i]);
+      if (!product || !product.variants || product.variants.length === 0) continue;
+
+      const baseIndex = product.variants.findIndex(v => v.unitCode === units[i]);
+      if (baseIndex === -1) continue;
+
+      const newQty = parseFloat(qtys[i]) || 0;
+      const newRate = parseFloat(rates[i]) || 0;
+
+      // Find previous quantity
+      const prevItem = originalStock.items.find(it =>
+        String(it.product) === String(ids[i]) && it.unitCode === units[i]
+      );
+      const prevQty = prevItem ? prevItem.item_qty : 0;
+
+      const qtyDiff = newQty - prevQty;
+
+      // Adjust product stock
+      product.variants[baseIndex].quantity += qtyDiff;
+      product.supplierPrice = newRate;
+
+      const baseQty = product.variants[baseIndex].quantity;
+
+      // Recalculate other variants
+      for (let j = 0; j < product.variants.length; j++) {
+        if (j !== baseIndex) {
+          product.variants[j].quantity = baseQty * product.variants[j].totalInBaseUnit;
+        }
+      }
+
+      await product.save();
+
+      // Add StockLedger entry
+      await StockLedger.create({
+        date: new Date(payment_date),
+        product: product._id,
+        customer: supplierDoc.supplier,
+        operator,
+        branch,
+        stock_ID: "edit",
+        particular: "Purchase",
+        variants: product.variants.map(variant => ({
+          unitCode: variant.unitCode,
+          cost_price: newRate,
+          stock_in: qtyDiff > 0 && variant.unitCode === units[i] ? qtyDiff : 0,
+          stock_out: qtyDiff < 0 && variant.unitCode === units[i] ? Math.abs(qtyDiff) : 0,
+          balance: variant.quantity,
+          total_sales: 0
+        }))
+      });
+
+      const total = newQty * newRate;
+      grandTotal += total;
+
+      updatedItems.push({
+        product: ids[i],
+        item_name: names[i],
+        unitCode: units[i],
+        item_qty: newQty,
+        item_rate: newRate,
+        item_total: total
+      });
+    }
+
+    // Update ReceivedStock
+    const updatedStock = await ReceivedStock.findOneAndUpdate(
+      { invoice_number },
+      {
+        supplier,
+        payment_date,
+        items: updatedItems,
+        grand_total: grandTotal,
+        paid_amount,
+        due_amount: grandTotal - paid_amount
+      },
+      { new: true, lean: true }
+    );
+
+    // Log the edit in ActionLog
+    await ActionLog.create({
+      action: "edit",
+      operator,
+      branch,
+      particulars: `Edited purchase invoice ${invoice_number}`,
+      targetModel: "ReceivedStock",
+      targetId: originalStock._id,
+      before: originalStock,
+      after: updatedStock,
+      date: new Date()
+    });
+
+    res.redirect('/purchase-stock');
+
+  } catch (err) {
+    console.error('Update ReceiveStock Error:', err);
+    next(err);
+  }
+});
+
+
+router.post('/deleteReceiveStock', async (req, res, next) => {
+  try {
+    const { invoice_number } = req.body;
+
+    if (!invoice_number) {
+      return res.status(400).send('Missing invoice number.');
+    }
+
+    // Find the original ReceivedStock
+    const originalStock = await ReceivedStock.findOne({ invoice_number }).populate('supplier');
+    if (!originalStock) return res.status(404).send('Purchase not found.');
+
+    const branch = req.user?.branch;
+    const operator = req.user?._id;
+
+    if (!branch) return res.status(400).send('Missing branch.');
+
+    // Loop through items to reverse the stock
+    for (const item of originalStock.items) {
+      const product = await Product.findById(item.product);
+      if (!product || !product.variants || product.variants.length === 0) continue;
+
+      const baseIndex = product.variants.findIndex(v => v.unitCode === item.unitCode);
+      if (baseIndex === -1) continue;
+
+      // Decrease the product stock
+      product.variants[baseIndex].quantity -= item.item_qty;
+      const baseQty = product.variants[baseIndex].quantity;
+
+      // Recalculate other variants
+      for (let j = 0; j < product.variants.length; j++) {
+        if (j !== baseIndex) {
+          product.variants[j].quantity = baseQty * product.variants[j].totalInBaseUnit;
+        }
+      }
+
+      await product.save();
+
+      // Add StockLedger entry marking stock_out
+      await StockLedger.create({
+        date: new Date(),
+        product: product._id,
+        customer: originalStock.supplier?.supplier || '',  // supplier name
+        operator,
+        branch,
+        stock_ID: 'delete',
+        particular: 'Purchase Deleted',
+        variants: product.variants.map(variant => ({
+          unitCode: variant.unitCode,
+          cost_price: item.item_rate,
+          stock_in: 0,
+          stock_out: variant.unitCode === item.unitCode ? item.item_qty : 0,
+          balance: variant.quantity,
+          total_sales: 0
+        }))
+      });
+    }
+
+    // === CREATE ACTION LOG ===
+    await ActionLog.create({
+      action: 'delete',
+      operator,
+      branch,
+      particulars: `Deleted purchase invoice ${invoice_number}`,
+      targetModel: 'ReceivedStock',
+      targetId: originalStock._id,
+      before: originalStock,    // store the full doc before deletion
+      after: null
+    });
+
+    // Finally delete the ReceivedStock
+    await ReceivedStock.deleteOne({ invoice_number });
+
+    return res.redirect('/purchase-stock');
+
+  } catch (err) {
+    console.error('Delete ReceiveStock Error:', err);
+    next(err);
+  }
+});
+
+
 
 
 // UNIT CODE 
@@ -2524,248 +3491,232 @@ router.get('/searchCustomer', async (req, res) => {
 });
 
 
-// router.post('/addinvoice', (req,res)=>{
-//   console.log("Received invoice data:", req.body);
-  
-// })
-
-
-router.post("/addInvoice", async (req, res, next) => {
+router.post("/addinvoice", async (req, res, next) => {
   const roundToTwo = num => Math.round((num + Number.EPSILON) * 100) / 100;
 
-  let {
-    customer_id,
-    customer_name,
-    mobile,
-    email,
-    address,
-    credit_limit,
-    payment_date,
-    sales_type,
-    discount = 0,
-    product,
-    qty,
-    unitcode,
-    rate,
-    total,
-    payment_type,
-    grand_total,
-    paid_amount
-  } = req.body;
-
-  // ensure all product fields are arrays
-  if (!Array.isArray(product)) product = [product];
-  if (!Array.isArray(qty)) qty = [qty];
-  if (!Array.isArray(unitcode)) unitcode = [unitcode];
-  if (!Array.isArray(rate)) rate = [rate];
-  if (!Array.isArray(total)) total = [total];
-
-  // filter out empty product names
-  const filtered = product.map((p, i) => ({
-    product: p?.trim(),
-    qty: qty[i],
-    unitcode: unitcode[i],
-    rate: rate[i],
-    total: total[i]
-  })).filter(item => item.product);
-
-  // unpack filtered back into arrays
-  product   = filtered.map(f => f.product);
-  qty       = filtered.map(f => f.qty);
-  unitcode  = filtered.map(f => f.unitcode);
-  rate      = filtered.map(f => f.rate);
-  total     = filtered.map(f => f.total);
-
-  const len = product.length;
-  if ([qty, unitcode, rate, total].some(arr => arr.length !== len)) {
-    return next({ status: 400, message: 'Product detail arrays must have the same length after filtering' });
-  }
-
-  const branchId = req.user.branch;
-  if (!branchId) return next({ status: 400, message: 'Branch ID not found on user' });
-
-  const grandTotalNum = roundToTwo(Number(grand_total));
-  const paidAmountNum = roundToTwo(Number(paid_amount));
-  const remainingAmount = roundToTwo(grandTotalNum - paidAmountNum);
-
-  const items = [];
-  let generatedInvoiceNo, generatedReceiptNo, savedInvoice;
-
   try {
-    const branch = await Branch.findById(branchId);
-    if (!branch) throw { status: 404, message: 'Branch not found' };
+    const branchId = req.user?.branch;
+    if (!branchId) throw { status: 400, message: "Branch not found on user" };
 
-    const prefix = branch.branch_name.toUpperCase().slice(0, 2);
+    let {
+      customer_id,
+      customer_name,
+      payment_date,
+      sales_type,
+      payment_type,
+      discount = 0,
+      product,
+      qty,
+      unitcode,
+      rate,
+      total,
+      grand_total,
+      paid_amount
+    } = req.body;
 
-    // generate invoice number
-    const invoicePrefix = `INV-${prefix}-`;
-    const latestInvoice = await Invoice.findOne({ invoice_no: { $regex: `^${invoicePrefix}` } }).sort({ createdAt: -1 });
-    const nextInvoiceNum = latestInvoice?.invoice_no?.match(/\d+$/)
-      ? parseInt(latestInvoice.invoice_no.match(/\d+$/)[0]) + 1 : 1;
-    generatedInvoiceNo = `${invoicePrefix}${String(nextInvoiceNum).padStart(3, '0')}`;
+    // force arrays
+    [product, qty, unitcode, rate, total] = [product, qty, unitcode, rate, total].map(arr =>
+      Array.isArray(arr) ? arr : [arr]
+    );
 
-    // generate receipt number
-    const receiptPrefix = sales_type === 'cash' ? `CH-${prefix}-` : `CR-${prefix}-`;
-    const latestReceipt = await Invoice.findOne({ receipt_no: { $regex: `^${receiptPrefix}` } }).sort({ createdAt: -1 });
-    const nextReceiptNum = latestReceipt?.receipt_no?.match(/\d+$/)
-      ? parseInt(latestReceipt.receipt_no.match(/\d+$/)[0]) + 1 : 1;
-    generatedReceiptNo = `${receiptPrefix}${String(nextReceiptNum).padStart(3, '0')}`;
+    // filter invalid product lines
+    const filtered = product.map((p, i) => ({
+      product: p?.trim(),
+      qty: qty[i],
+      unitcode: unitcode[i],
+      rate: rate[i],
+      total: total[i]
+    })).filter(item => item.product);
 
-    // get config for negative sales
-    const config = await Config.findOne({ key: "negativeSalesActive" });
-    const negativeSalesActive = config?.value === true;
+    if (!filtered.length) throw { status: 400, message: "No valid product lines" };
+
+    const grandTotalNum = roundToTwo(+grand_total);
+    const paidAmountNum = roundToTwo(+paid_amount);
+    const remainingAmount = roundToTwo(grandTotalNum - paidAmountNum);
 
     // find or create customer
     let customer = customer_id
       ? await Customer.findById(customer_id)
-      : await Customer.create({
-          customer_name,
-          mobile,
-          email,
-          address,
-          credit_limit,
-          branch: branchId
-        });
+      : await Customer.create({ customer_name, branch: branchId });
+    if (!customer) throw { status: 400, message: "Unable to find or create customer" };
 
-    if (!customer) throw { status: 400, message: 'Unable to identify or create customer.' };
+    // credit limit check
+    if (sales_type === 'credit') {
+      const newDebt = (customer.remaining_amount || 0) + remainingAmount;
+      if (customer.credit_limit && newDebt > customer.credit_limit) {
+        throw { status: 400, message: `Credit limit exceeded! Available: ₦${(customer.credit_limit - (customer.remaining_amount || 0)).toLocaleString()}` };
+      }
+    }
 
-    // loop over products and save items
-    for (let i = 0; i < len; i++) {
-      const productName = product[i];
-      const soldQty = Math.round(Number(qty[i]) * 2) / 2;
-      const unitCode = unitcode[i];
-      const itemRate = roundToTwo(Number(rate[i]));
-      const itemTotal = roundToTwo(Number(total[i]));
+    const config = await Config.findOne({ key: "negativeSalesActive" });
+    const negativeSalesAllowed = config?.value === true;
+
+    // generate invoice & receipt numbers
+    const branch = await Branch.findById(branchId);
+    const prefix = branch.branch_name.slice(0, 2).toUpperCase();
+    const [invoice_no, receipt_no] = await Promise.all([
+      generateNextNumber("invoice_no", `INV-${prefix}-`),
+      generateNextNumber("receipt_no", sales_type === 'cash' ? `CH-${prefix}-` : `CR-${prefix}-`)
+    ]);
+
+    const items = [];
+
+    for (const { product: productName, qty: qtyStr, unitcode, rate: rateStr, total: totalStr } of filtered) {
+      const soldQty = roundToTwo(+qtyStr);
+      const itemRate = roundToTwo(+rateStr);
+      const itemTotal = roundToTwo(+totalStr);
 
       const productDoc = await Product.findOne({ product: productName, branch: branchId });
       if (!productDoc) continue;
 
-      const sellingVariant = productDoc.variants.find(v => v.unitCode === unitCode);
+      // always treat first variant as base
+      const baseVariant = productDoc.variants[0];
+      const sellingVariant = productDoc.variants.find(v => v.unitCode === unitcode);
       if (!sellingVariant) continue;
 
-      if (!negativeSalesActive && sellingVariant.quantity < soldQty) {
-        throw { status: 400, message: `Insufficient stock for ${productName} in ${unitCode}` };
+      // negative sales check
+      if (!negativeSalesAllowed && sellingVariant.quantity < soldQty) {
+        throw { status: 400, message: `Insufficient stock for ${productName} (${unitcode})` };
       }
 
-      sellingVariant.quantity -= soldQty;
+      // deduct sold quantity
+      sellingVariant.quantity = sellingVariant.quantity - soldQty;
+
+      // if sold from other variant, recalculate base
+      if (sellingVariant.unitCode !== baseVariant.unitCode && sellingVariant.totalInBaseUnit) {
+        baseVariant.quantity = sellingVariant.quantity / sellingVariant.totalInBaseUnit;
+      }
+      // else: sold from base, baseVariant.quantity already reduced
+
+      // recalculate all other variants from base
+      productDoc.variants.forEach(v => {
+        if (v.unitCode !== baseVariant.unitCode && v.totalInBaseUnit) {
+          v.quantity = baseVariant.quantity * v.totalInBaseUnit;
+        }
+      });
+
+      // round all before saving
+      productDoc.variants.forEach(v => v.quantity = roundToTwo(v.quantity));
+
+      await productDoc.save();
 
       items.push({
         product: productDoc._id,
         product_name: productName,
         qty: soldQty,
-        unitcode: unitCode,
+        unitcode,
         rate: itemRate,
         total: itemTotal
       });
 
-      await productDoc.save();
-
-      // create StockLedger entry
+      // StockLedger
       await StockLedger.create({
+        date: new Date(payment_date),
         product: productDoc._id,
         branch: branchId,
         operator: req.user._id,
         customer: customer.customer_name,
-        date: new Date(payment_date),
-        particular: 'sales',
-        stock_ID: generatedInvoiceNo,
+        stock_ID: invoice_no,
+        particular: 'Sales',
         variants: productDoc.variants.map(v => ({
           unitCode: v.unitCode,
           stock_in: 0,
-          stock_out: v.unitCode === unitCode ? soldQty : 0,
+          stock_out: v.unitCode === unitcode ? soldQty : 0,
           balance: v.quantity,
           cost_price: v.cost_price || 0,
-          total_sales: v.unitCode === unitCode ? itemTotal : 0
+          total_sales: v.unitCode === unitcode ? itemTotal : 0
         }))
       });
 
+      // SalesLedger
       await SalesLedger.create({
         product: productDoc._id,
         product_name: productName,
         sale_date: new Date(payment_date),
-        unit: unitCode,
+        unit: unitcode,
         unit_price: itemRate,
         quantity_sold: soldQty,
         amount: itemTotal,
         customer: customer._id,
         customer_name: customer.customer_name,
-        receipt_no: generatedReceiptNo,
+        receipt_no,
         instock_qty: sellingVariant.quantity,
         branch: branchId,
         operator: req.user._id,
-        sales_type 
+        sales_type
       });
     }
 
-    // save invoice
-    savedInvoice = await Invoice.create({
+    // save Invoice
+    const invoiceDoc = await Invoice.create({
       customer_id: customer._id,
       customer_name: customer.customer_name,
-      mobile,
-      email,
-      address,
-      credit_limit,
       payment_date,
       sales_type,
-      discount: Number(discount) || 0,
-      items,
       payment_type,
+      discount: +discount || 0,
+      items,
       grand_total: grandTotalNum,
       paid_amount: paidAmountNum,
       remaining_amount: remainingAmount,
-      invoice_no: generatedInvoiceNo,
-      receipt_no: generatedReceiptNo,
-      user: req.user._id,
+      invoice_no,
+      receipt_no,
       branch: branchId,
+      user: req.user._id,
       createdBy: req.user._id
     });
 
-    // update customer ledger & customer balance
-    const lastLedger = await CustomerLedger.findOne({ customer: customer._id, branch: branchId }).sort({ createdAt: -1 });
-    let prevBalance = lastLedger ? lastLedger.Balance : 0;
-    let newBalance = prevBalance;
-
+    // customer ledger: for credit, balance becomes negative
+    let newBalance = customer.remaining_amount || 0;
     if (sales_type === 'credit') {
-      newBalance = prevBalance - remainingAmount;
-      customer.total_debt = newBalance;
+      newBalance -= remainingAmount;
       customer.remaining_amount = newBalance;
-      customer.sales_type = 'credit';
-      customer.credit_sales_count = (customer.credit_sales_count || 0) + 1;
 
       await CustomerLedger.create({
         customer: customer._id,
         branch: branchId,
         type: 'credit-sales',
-        refNo: generatedReceiptNo,
+        refNo: receipt_no,
         date: payment_date,
         amount: grandTotalNum,
-        paid: 0,
+        paid: paidAmountNum,
         Balance: newBalance
       });
-    } else if (sales_type === 'cash') {
-      customer.sales_type = 'cash';
-      customer.cash_sales_count = (customer.cash_sales_count || 0) + 1;
-
+    } else {
       await CustomerLedger.create({
         customer: customer._id,
         branch: branchId,
         type: 'paid-sales',
-        refNo: generatedReceiptNo,
+        refNo: receipt_no,
         date: payment_date,
         amount: grandTotalNum,
-        paid: 0,
-        Balance: prevBalance
+        paid: paidAmountNum,
+        Balance: newBalance
       });
     }
 
     await customer.save();
 
-    res.redirect(`/receipt/${savedInvoice._id}`);
+    res.redirect(`/receipt/${invoiceDoc._id}`);
   } catch (err) {
-    console.error("Error in /addInvoice:", err);
+    console.error("Error adding invoice:", err);
     next(err);
   }
+
+  async function generateNextNumber(field, prefix) {
+    const last = await Invoice.findOne({ [field]: { $regex: `^${prefix}` } }).sort({ createdAt: -1 });
+    const nextNum = last?.[field]?.match(/\d+$/)
+      ? parseInt(last[field].match(/\d+$/)[0]) + 1 : 1;
+    return `${prefix}${String(nextNum).padStart(3, '0')}`;
+  }
 });
+
+
+
+
+
+
+
 
 
 
@@ -2990,6 +3941,7 @@ router.post("/edit-expired-product", async (req, res) => {
 // EXPIRED ROUTE ENDS HERE ----------------- TECH MAYOR GROUPS
 
 // LOW STOCK ROUTE STARTS HERE
+
 router.get("/lowStock", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/");
 
@@ -3005,7 +3957,7 @@ router.get("/lowStock", async (req, res) => {
 
       // LOW STOCK: products with any variant quantity <= lowStockAlert
       let lowStockProducts = await Product.aggregate([
-        { $match: { branch: branchToFilter } },
+        { $match: { branch: new mongoose.Types.ObjectId(branchToFilter) } },
         {
           $addFields: {
             hasLowStock: {
@@ -3029,7 +3981,7 @@ router.get("/lowStock", async (req, res) => {
 
       // OUT OF STOCK: products where all variants have quantity <= 0
       let outOfStockProducts = await Product.aggregate([
-        { $match: { branch: branchToFilter } },
+        { $match: { branch: new mongoose.Types.ObjectId(branchToFilter) } },
         {
           $addFields: {
             totalVariants: { $size: "$variants" },
@@ -3109,7 +4061,7 @@ router.get("/lowStock", async (req, res) => {
 
     // STAFF ROUTE
     let lowStockProducts = await Product.aggregate([
-      { $match: { branch: user.branch._id } },
+      { $match: { branch: new mongoose.Types.ObjectId(user.branch._id) } },
       {
         $addFields: {
           hasLowStock: {
@@ -3132,7 +4084,7 @@ router.get("/lowStock", async (req, res) => {
     ]);
 
     let outOfStockProducts = await Product.aggregate([
-      { $match: { branch: user.branch._id } },
+      { $match: { branch: new mongoose.Types.ObjectId(user.branch._id) } },
       {
         $addFields: {
           totalVariants: { $size: "$variants" },
@@ -3210,6 +4162,7 @@ router.get("/lowStock", async (req, res) => {
     res.redirect("/error-404");
   }
 });
+
 // LOW STOCK ROUTE ENDS HERE ----------------- TECH MAYOR GROUPS
 
 // EXPENSE ROUTE STARTS HERE
@@ -3831,11 +4784,9 @@ router.get("/stock-report", async (req, res) => {
     const { productId, startDate, endDate } = req.query;
     const branchId = user.branch._id;
 
-    const filters = { productId, startDate, endDate }; // add this!
+    const filters = { productId, startDate, endDate };
 
-    const stockQuery = {
-      branch: branchId,
-    };
+    const stockQuery = { branch: branchId };
 
     if (productId) {
       stockQuery.product = productId;
@@ -3844,14 +4795,23 @@ router.get("/stock-report", async (req, res) => {
     if (startDate || endDate) {
       stockQuery.date = {};
       if (startDate) stockQuery.date.$gte = new Date(startDate);
-      if (endDate) stockQuery.date.$lte = new Date(endDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        stockQuery.date.$lte = end;
+      }
     }
 
     const stockLedgers = await StockLedger.find(stockQuery)
       .populate("product")
       .populate("branch", "branch_name")
       .populate("operator", "fullname")
-      .sort({ date: 1 });
+      .sort({ createdAt: 1 })
+
+    console.log("StockLedgers found:", stockLedgers.length);
+    console.log(stockLedgers.map(l => ({
+      stock_ID: l.stock_ID, particular: l.particular, date: l.date
+    })));
 
     if (user.role === 'owner') {
       const ownerBranch = await Branch.findById(branchId);
@@ -3878,6 +4838,7 @@ router.get("/stock-report", async (req, res) => {
     res.redirect("/error-404");
   }
 });
+
 
 router.get('/api/products/search', async (req, res) => {
   try {
@@ -4168,6 +5129,85 @@ router.get('/api/suppliers/search', async (req, res) => {
 });
 
 
+
+// LOGS STARTS HERE 
+router.get("/view-log", async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  try {
+    const selectedBranchId = req.query.branchId;
+    const currentSort = req.query.sort || 'recently';
+
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/");
+
+    let branchToFilter = selectedBranchId || user.branch._id;
+
+    let sortQuery = { date: -1 };
+    if (currentSort === "ascending") sortQuery = { date: 1 };
+    else if (currentSort === "descending") sortQuery = { date: -1 };
+
+    let logQuery = { branch: branchToFilter };
+
+    if (currentSort === "today") {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      logQuery.date = { $gte: today };
+    } else if (currentSort === "lastMonth") {
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+      logQuery.date = { $gte: lastMonth };
+    } else if (currentSort === "last7days") {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      logQuery.date = { $gte: sevenDaysAgo };
+    }
+
+    let allBranches = [];
+    let ownerBranch = null;
+
+    if (user.role === 'owner') {
+      allBranches = await Branch.find();
+      ownerBranch = await Branch.findById(branchToFilter);
+    } else {
+      allBranches = [user.branch];
+      ownerBranch = user.branch;
+    }
+
+    const logs = await ActionLog.find(logQuery)
+      .populate('operator')
+      .sort(sortQuery);
+
+    res.render("Log/logs", {
+      user,
+      ownerBranch: { branch: ownerBranch },
+      branches: allBranches,
+      selectedBranchId: branchToFilter,
+      currentSort,
+      logs
+    });
+
+  } catch (err) {
+    console.error("Error fetching logs:", err);
+    res.redirect("/error-404");
+  }
+});
+
+
+
+router.post('/delete-log', async (req, res, next) => {
+  try {
+    const { logId } = req.body;
+    if (!logId) return res.status(400).send('Missing logId');
+
+    await ActionLog.findByIdAndDelete(logId);
+
+    res.redirect('/view-log');
+  } catch (err) {
+    console.error('Error deleting log:', err);
+    next(err);
+  }
+});
 
 
 module.exports = router;

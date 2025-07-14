@@ -99,120 +99,128 @@
 									<span class="btn-searchset"><i class="ti ti-search fs-14 feather-search"></i></span>
 								</div>
 							</div>
-							<div class="d-flex table-dropdown my-xl-auto right-content align-items-center flex-wrap row-gap-3">
-								<div class="dropdown me-2">
-									<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
-										From Warehouse
-									</a>
-									<ul class="dropdown-menu  dropdown-menu-end p-3">
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Lavish Warehouse</a>
-										</li>
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Quaint Warehouse</a>
-										</li>
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Traditional Warehouse</a>
-										</li>
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Cool Warehouse</a>
-										</li>
-									</ul>
-								</div>
-								<div class="dropdown me-2">
-									<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
-										To Warehouse
-									</a>
-									<ul class="dropdown-menu  dropdown-menu-end p-3">
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">North Zone Warehouse</a>
-										</li>
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Nova Storage Hub</a>
-										</li>
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Cool Warehouse</a>
-										</li>
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Retail Supply Hub</a>
-										</li>
-									</ul>
+							<div class="d-flex table-dropdown my-xl-auto right-content align-items-center flex-wrap gap-3">
+								<div class="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
+					<div class="dropdown">
+						<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
+						Switch Branch
+						</a>
+						<ul class="dropdown-menu dropdown-menu-end p-3">
+						<% branches.forEach(branch => { %>
+							<li>
+							<a 
+								href="?branchId=<%= branch._id %>" 
+								class="dropdown-item rounded-1">
+								<%= branch.branch_name %>
+							</a>
+							</li>
+						<% }) %>
+						</ul>
+					</div>
 								</div>
 								<div class="dropdown">
-									<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
-										Sort By : Last 7 Days
-									</a>
-									<ul class="dropdown-menu  dropdown-menu-end p-3">
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Recently Added</a>
-										</li>
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Ascending</a>
-										</li>
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Desending</a>
-										</li>
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Last Month</a>
-										</li>
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Last 7 Days</a>
-										</li>
-									</ul>
-								</div>
+                                <a href="#" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
+                                Sort By :
+                                <% if (currentSort === "today") { %> Today
+                                <% } else if (currentSort === "lastMonth") { %> Last Month
+                                <% } else if (currentSort === "last7days") { %> Last 7 Days
+                                <% } else if (currentSort === "ascending") { %> Ascending
+                                <% } else if (currentSort === "descending") { %> Descending
+                                <% } else { %> Recently Added <% } %>
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end p-3">
+                                <li>
+                                    <a href="?branchId=<%= selectedBranchId %>&sort=today" class="dropdown-item rounded-1">Today</a>
+                                </li>
+                                <li>
+                                    <a href="?branchId=<%= selectedBranchId %>&sort=lastMonth" class="dropdown-item rounded-1">Last Month</a>
+                                </li>
+                                <li>
+                                    <a href="?branchId=<%= selectedBranchId %>&sort=last7days" class="dropdown-item rounded-1">Last 7 Days</a>
+                                </li>
+                                <li>
+                                    <a href="?branchId=<%= selectedBranchId %>&sort=recently" class="dropdown-item rounded-1">Recently Added</a>
+                                </li>
+                                <li>
+                                    <a href="?branchId=<%= selectedBranchId %>&sort=ascending" class="dropdown-item rounded-1">Ascending</a>
+                                </li>
+                                <li>
+                                    <a href="?branchId=<%= selectedBranchId %>&sort=descending" class="dropdown-item rounded-1">Descending</a>
+                                </li>
+                                </ul>
+                            	</div>
 							</div>
 						</div>
 						<div class="card-body p-0">
 							<div class="table-responsive">
+								<div class="table-responsive">
+								<div class="branch-info">
+									<p class="mb-0">Branch: <strong><%= ownerBranch && ownerBranch.branch && ownerBranch.branch.branch_name ? ownerBranch.branch.branch_name : 'N/A' %></strong></p>
+								</div>
 								<% if (Array.isArray(transfers) && transfers.length > 0) { %>
-  <table class="table datatable" id="DataTables_Table_0">
-    <thead class="thead-light">
-      <tr>
-        <th>From Branch</th>
-        <th>To Branch</th>
-        <th>No of Products</th>
-        <th>Quantity Transferred</th>
-        <th>Ref Number</th>
-        <th>Date</th>
-        <th class="no-sort"></th>
-      </tr>
-    </thead>
-    <tbody>
-      <% transfers.forEach(t => { %>
-        <tr>
-          <td><%= t.branch_from?.branch_name || 'N/A' %></td>
-          <td><%= t.branch_to?.branch_name || 'N/A' %></td>
-          <td>1</td>
-          <td><%= t.quantity %></td>
-          <td>#<%= t.invoice_number %></td>
-          <td><%= new Date(t.date).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' }) %></td>
-          <td>
-            <div class="edit-delete-action d-flex align-items-center justify-content-center">
-              <a class="me-2 p-2 d-flex align-items-center justify-content-between border rounded"
-                 href="#"
-                 data-bs-toggle="modal"
-                 data-bs-target="#edit-stock-transfer"
-                 data-id="<%= t._id %>">
-                <i data-feather="edit" class="feather-edit"></i>
-              </a>
-              <a class="p-2 d-flex align-items-center justify-content-between border rounded"
-                 href="javascript:void(0);"
-                 data-bs-toggle="modal"
-                 data-bs-target="#delete"
-                 data-id="<%= t._id %>">
-                <i data-feather="trash-2" class="feather-trash-2"></i>
-              </a>
-            </div>
-          </td>
-        </tr>
-      <% }) %>
-    </tbody>
-  </table>
-<% } else { %>
-  <div class="alert alert-info text-center mt-3">
-    No transfer records available.
-  </div>
-<% } %>
+								<table class="table datatable" id="DataTables_Table_0">
+									<thead class="thead-light">
+									<tr>
+										<th>From Branch</th>
+										<th>To Branch</th>
+										<th>No of Products</th>
+										<th>Quantity Transferred</th>
+										<th>Ref Number</th>
+										<th>Date</th>
+										<th class="no-sort"></th>
+									</tr>
+									</thead>
+									<tbody>
+									<% transfers.forEach(t => { %>
+										<tr>
+										<td><%= t.branch_from?.branch_name || 'N/A' %></td>
+										<td><%= t.branch_to?.branch_name || 'N/A' %></td>
+										<td>1</td>
+										<td><%= t.quantity %></td>
+										<td>#<%= t.invoice_number %></td>
+										<td><%= new Date(t.date).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' }) %></td>
+										<td>
+											<div class="edit-delete-action d-flex align-items-center justify-content-center">
+<a 
+  class="edit-transfer-btn"
+  data-id="<%= t._id %>"
+  data-product-id="<%= t.product?._id %>"
+  data-product-name="<%= t.product?.product || 'Unknown' %>"
+  data-product-image="<%= t.product?.product_image || 'default.png' %>"
+  data-unit-code="<%= t.unitCode %>"
+  data-quantity="<%= t.quantity %>"
+  data-branch-from-id="<%= t.branch_from?._id %>"
+  data-branch-from-name="<%= t.branch_from?.branch_name %>"
+  data-branch-to-id="<%= t.branch_to?._id %>"
+  data-branch-to-name="<%= t.branch_to?.branch_name %>"
+  data-invoice-number="<%= t.invoice_number %>"
+  data-date="<%= t.date.toISOString() %>"
+  data-notes="<%= t.notes || '' %>"
+  data-bs-toggle="modal"
+  data-bs-target="#edit-stock-transfer"
+>
+  <i data-feather="edit"></i>
+</a>
+
+
+											<a class="p-2 d-flex align-items-center justify-content-between border rounded"
+												href="javascript:void(0);"
+												data-bs-toggle="modal"
+												data-bs-target="#delete"
+												data-id="<%= t._id %>">
+												<i data-feather="trash-2" class="feather-trash-2"></i>
+											</a>
+											</div>
+										</td>
+										</tr>
+									<% }) %>
+									</tbody>
+								</table>
+								<% } else { %>
+								<div class="alert alert-info text-center mt-3">
+									No transfer records available.
+								</div>
+								<% } %>
 
 							</div>
 						</div>
@@ -282,6 +290,12 @@
 									<label class="form-label">Transaction Number<span class="text-danger ms-1">*</span></label>
 									<input name="invoice_number" id="invoice_number" type="text" class="form-control">
 								</div>
+							</div>
+							<div class="col-lg-12">
+									<div class="mb-3 search-form mb-0">
+										<label class="form-label">Notes<span class="text-danger ms-1">*</span></label>
+										<textarea name="notes" class="form-control"></textarea>
+									</div>
 							</div>
 						</div>
 						<div class="row">
@@ -371,14 +385,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Handle product search input
   tableBody.addEventListener('input', (e) => {
     if (e.target.classList.contains('productSearch')) {
       const row = e.target.closest('.item-row');
       let suggestionsDiv = row.querySelector('.suggestions');
       if (!suggestionsDiv) {
         suggestionsDiv = document.createElement('div');
-        suggestionsDiv.className = 'suggestions position-absolute bg-white border';
-        row.querySelector('td').appendChild(suggestionsDiv);
+        suggestionsDiv.className = 'suggestions position-absolute bg-white border rounded';
+        suggestionsDiv.style.zIndex = '1000';
+        row.querySelector('.search-form').appendChild(suggestionsDiv);
       }
 
       const term = e.target.value.trim().toLowerCase();
@@ -402,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Handle clicking on a suggestion or deleting row
   tableBody.addEventListener('click', (e) => {
     if (e.target.classList.contains('suggestion-item')) {
       const row = e.target.closest('.item-row');
@@ -409,7 +426,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const product = products.find(p => p.product === productName);
 
       row.querySelector('.productSearch').value = product.product;
-      // Save product name to hidden input (or you can rename it to productName[] directly)
       row.querySelector('input[name="product"]').value = product.product;
 
       // fill unit select
@@ -425,8 +441,10 @@ document.addEventListener('DOMContentLoaded', () => {
       // fill other fields with first variant
       updateFields(row, product.variants[0]);
 
-      // hide suggestions
-      row.querySelector('.suggestions').style.display = 'none';
+      // ✅ hide & clear suggestions
+      const suggestionsDiv = row.querySelector('.suggestions');
+      suggestionsDiv.style.display = 'none';
+      suggestionsDiv.innerHTML = '';
     }
 
     if (e.target.closest('.deleteRowBtn')) {
@@ -434,6 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Handle unit change
   tableBody.addEventListener('change', (e) => {
     if (e.target.name === 'unitCode[]') {
       const row = e.target.closest('.item-row');
@@ -444,6 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Auto-add new row if qty entered
   tableBody.addEventListener('input', (e) => {
     if (e.target.name === 'transferQTY') {
       const row = e.target.closest('.item-row');
@@ -452,25 +472,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Close suggestions when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('productSearch') && !e.target.classList.contains('suggestion-item')) {
+      document.querySelectorAll('.suggestions').forEach(s => {
+        s.style.display = 'none';
+        s.innerHTML = '';
+      });
+    }
+  });
+
   function updateFields(row, variant) {
     row.querySelector('input[name="quantity[]"]').value = variant.quantity || 0;
     row.querySelector('input[name="sellPrice[]"]').value = variant.sellPrice || 0;
-    row.querySelector('input[name="supplierPrice"]').value = variant.supplierPrice || 0;
+    const supplierPriceInput = row.querySelector('input[name="supplierPrice"]');
+    if (supplierPriceInput) supplierPriceInput.value = variant.supplierPrice || 0;
   }
 
   function cloneRow() {
     const firstRow = tableBody.querySelector('.item-row');
     const clone = firstRow.cloneNode(true);
+
+    // clear inputs
     clone.querySelectorAll('input').forEach(i => i.value = '');
-    const unitSelect = clone.querySelector('select[name="unitCode[]"]');
-    unitSelect.innerHTML = '';
-    // remove existing suggestions div
+    // clear select
+    clone.querySelector('select[name="unitCode[]"]').innerHTML = '';
+    // remove suggestions if exist
     const sugg = clone.querySelector('.suggestions');
     if (sugg) sugg.remove();
+
     tableBody.appendChild(clone);
   }
 });
 </script>
+
 
 
 
@@ -489,196 +524,60 @@ document.addEventListener('DOMContentLoaded', () => {
 							<span aria-hidden="true">&times;</span>
 						</button>
 					</div>
-					<form action="https://dreamspos.dreamstechnologies.com/html/template/stock-transfer.html">
-						<div class="modal-body">
-							<div class="row">
-								<div class="col-lg-6">
-									<div class="mb-3">
-										<label class="form-label">Warehouse From<span class="text-danger ms-1">*</span></label>
-										<select class="select">
-											<option>Lobar Handy</option>
-											<option>Quaint Warehouse</option>
-										</select>
-									</div>
-								</div>
-								<div class="col-lg-6">
-									<div class="mb-3">
-										<label class="form-label">Warehouse To<span class="text-danger ms-1">*</span></label>
-										<select class="select">
-											<option>Selosy</option>
-											<option>Logerro</option>
-										</select>
-									</div>
-								</div>
-								<div class="col-lg-12">
-									<div class="mb-3">
-										<label class="form-label">Reference No<span class="text-danger ms-1">*</span></label>
-										<input type="text" class="form-control" value="32434545">
-									</div>
-								</div>
-								<div class="col-lg-12">
-									<div class="mb-3 search-form">
-										<label class="form-label">Product<span class="text-danger ms-1">*</span></label>
-										<div class="position-relative">
-											<input type="text" class="form-control" value="Nike Jordan">
-											<i data-feather="search" class="feather-search"></i>
-										</div>
-									</div>
-								</div>
-								<div class="col-lg-12">
-									<div class="modal-body-table">
-										<div class="table-responsive">
-											<table class="table  datanew">
-												<thead>
-													<tr>
-														<th>Product</th>
-														<th>SKU</th>
-														<th>Category</th>
-														<th>Qty</th>
-														<th>Action</th>
-													</tr>
-												</thead>
-												<tbody>
-													<tr>
-														<td>
-															<div class="d-flex align-items-center">
-																<a href="javascript:void(0);" class="avatar avatar-md me-2">
-																	<img src="assets/img/products/stock-img-02.png" alt="product">
-																</a>
-																<a href="javascript:void(0);">Nike Jordan</a>
-															</div>												
-														</td>
-														<td>PT002</td>
-														<td>Nike</td>
-														<td>
-															<div class="product-quantity bg-gray-transparent border-0">
-																<span class="quantity-btn"><i data-feather="minus-circle" class="feather-search"></i></span>
-																<input type="text" class="quntity-input bg-transparent" value="2">
-																<span class="quantity-btn">+<i data-feather="plus-circle" class="plus-circle"></i></span>
-															</div>
-														</td>
-														<td>
-															<div class="edit-delete-action d-flex align-items-center justify-content-center">
-																<a class="p-2 d-flex align-items-center justify-content-center border rounded" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#delete">
-																	<i data-feather="trash-2" class="feather-trash-2"></i>
-																</a>
-															</div>
-														</td>
-													</tr>
-												</tbody>
-											</table>
-										</div>
-									</div>
-								</div>
-								<div class="col-lg-12">
-									<div class="mb-3 search-form mb-0">
-										<label class="form-label">Notes<span class="text-danger ms-1">*</span></label>
-										<textarea class="form-control">The Jordan brand is owned by Nike (owned by the Knight family), as, at the time, the company was building its strategy to work with athletes to launch shows that could inspire consumers.Although Jordan preferred Converse and Adidas, they simply could not match the offer Nike made. </textarea>
-									</div>
-								</div>
+					<form action="/edit-transfer" method="POST">
+					<input type="hidden" name="transferId" id="editTransferId">
+					<input type="hidden" name="product" id="editProductId">
+					<input type="hidden" name="unitCode" id="editUnitCode"> <!-- ✅ add this -->
+
+					<div class="modal-body">
+						<div class="row">
+						<div class="col-lg-6 mb-3">
+							<label class="form-label">Transfer From<span class="text-danger ms-1">*</span></label>
+							<select name="branch_from" id="editBranchFrom" class="form-select"></select>
+						</div>
+						<div class="col-lg-6 mb-3">
+							<label class="form-label">Transfer To<span class="text-danger ms-1">*</span></label>
+							<select name="branch_to" id="editBranchTo" class="form-select"></select>
+						</div>
+						<div class="col-lg-12 mb-3">
+							<label class="form-label">Reference No<span class="text-danger ms-1">*</span></label>
+							<input type="text" name="invoice_number" id="editInvoiceNumber" class="form-control">
+						</div>
+						<div class="col-lg-12 mb-3">
+							<label class="form-label">Date<span class="text-danger ms-1">*</span></label>
+							<input type="date" name="date" id="editDate" class="form-control">
+						</div>
+						<div class="col-lg-12 mb-3">
+							<div class="table-responsive">
+							<table class="table datanew">
+								<thead>
+								<tr>
+									<th>Product</th>
+									<th>Unit</th>
+									<th>Qty</th>
+								</tr>
+								</thead>
+								<tbody id="editProductsTbody"></tbody>
+							</table>
 							</div>
 						</div>
-						<div class="modal-footer">
-							<button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancel</button>
-							<button type="submit" class="btn btn-primary">Save Changes</button>
+						<div class="col-lg-12 mb-3">
+							<label class="form-label">Notes</label>
+							<textarea name="notes" id="editNotes" class="form-control"></textarea>
 						</div>
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancel</button>
+						<button type="submit" class="btn btn-primary">Save Changes</button>
+					</div>
 					</form>
+
+
 				</div>
 			</div>
 		</div>
 		<!-- /Edit Stock -->
-
-		<!-- Import Transfer -->
-		<div class="modal fade" id="view-notes">
-			<div class="modal-dialog modal-dialog-centered">
-				<div class="modal-content">
-					<div class="modal-header">
-						<div class="page-title">
-							<h4>Import Transfer</h4>
-						</div>
-						<button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
-							<span aria-hidden="true">&times;</span>
-						</button>
-					</div>
-					<form action="https://dreamspos.dreamstechnologies.com/html/template/stock-transfer.html">
-						<div class="modal-body">
-							<div class="row">
-								<div class="col-lg-4 col-sm-6 col-12">
-									<div class="mb-3">
-										<label class="form-label">From<span class="text-danger ms-1">*</span></label>
-										<select class="select">
-											<option>select</option>
-											<option>Lavish Warehouse</option>
-											<option>Lobar Handy</option>
-											<option>Quaint Warehouse</option>
-										</select>
-									</div>
-								</div>
-								<div class="col-lg-4 col-sm-6 col-12">
-									<div class="mb-3">
-										<label class="form-label">To<span class="text-danger ms-1">*</span></label>
-										<select class="select">
-											<option>Select</option>
-											<option>North Zone Warehouse</option>
-											<option>Nova Storage Hub</option>
-											<option>Cool Warehouse</option>
-										</select>
-									</div>
-								</div>
-								<div class="col-lg-4 col-sm-6 col-12">
-									<div class="mb-3">
-										<label class="form-label">Satus<span class="text-danger ms-1">*</span></label>
-										<select class="select">
-											<option>Select</option>
-											<option>Sent</option>
-											<option>Pending</option>
-										</select>
-									</div>
-								</div>
-								<div class="col-lg-12 col-sm-6 col-12">
-									<div class="row">
-										<div>
-											<div class="modal-footer-btn download-file">
-												<a href="javascript:void(0)" class="btn btn-submit">Download Sample File</a>
-											</div>
-										</div>
-									</div>
-								</div>
-								<div class="col-lg-12">
-									<div class="mb-3 image-upload-down">
-										<label class="form-label">	Upload CSV File</label>
-										<div class="image-upload download">
-											<input type="file">
-											<div class="image-uploads">
-												<img src="assets/img/download-img.png" alt="img">
-												<h4>Drag and drop a <span>file to upload</span></h4>
-											</div>
-										</div>
-									</div>
-								</div>
-								<div class="col-lg-12 col-sm-6 col-12">
-									<div class="mb-3">
-										<label class="form-label">Shipping<span class="text-danger ms-1">*</span></label>
-										<input type="text" class="form-control">
-									</div>
-								</div>
-							</div>
-							<div class="col-lg-12">
-								<div class="mb-3">
-									<label class="form-label">Description</label>
-									<textarea class="form-control" rows="3"></textarea>
-								</div>
-							</div>
-						</div>
-						<div class="modal-footer">
-							<button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancel</button>
-							<button type="submit" class="btn btn-primary">Submit</button>
-						</div>
-					</form>
-				</div>
-			</div>
-		</div>
-		<!-- /Import Transfer -->
 
 		<!-- Delete -->
 		<div class="modal fade modal-default" id="delete">
@@ -686,7 +585,8 @@ document.addEventListener('DOMContentLoaded', () => {
 				<div class="modal-content">
 					<div class="modal-body p-0">
 						<div class="success-wrap text-center">
-							<form action="https://dreamspos.dreamstechnologies.com/html/template/stock-transfer.html">
+							<form action="/delete-transfer" method="POST">
+								<input type="hidden" name="transferId" id="deleteTransferId">
 								<div class="icon-success bg-danger-transparent text-danger mb-2">
 									<i class="ti ti-trash"></i>
 								</div>
@@ -703,7 +603,75 @@ document.addEventListener('DOMContentLoaded', () => {
 			</div>
 		</div>
 		<!-- /Delete -->
-		  
+		<script>
+		document.addEventListener('DOMContentLoaded', () => {
+		const editButtons = document.querySelectorAll('.edit-transfer-btn');
+		editButtons.forEach(btn => {
+			btn.addEventListener('click', () => {
+			const id = btn.dataset.id;
+			const productId = btn.dataset.productId;
+			const productName = btn.dataset.productName;
+			const productImage = btn.dataset.productImage;
+			const unitCode = btn.dataset.unitCode;
+			const quantity = btn.dataset.quantity;
+			const branchFromId = btn.dataset.branchFromId;
+			const branchFromName = btn.dataset.branchFromName;
+			const branchToId = btn.dataset.branchToId;
+			const branchToName = btn.dataset.branchToName;
+			const invoiceNumber = btn.dataset.invoiceNumber;
+			const date = btn.dataset.date;
+			const notes = btn.dataset.notes;
+
+			document.getElementById('editTransferId').value = id;
+			document.getElementById('editProductId').value = productId;
+			document.getElementById('editUnitCode').value = unitCode; // ✅ fill hidden input
+
+			document.getElementById('editInvoiceNumber').value = invoiceNumber || '';
+			document.getElementById('editDate').value = date ? new Date(date).toISOString().split('T')[0] : '';
+			document.getElementById('editNotes').value = notes || '';
+
+			document.getElementById('editBranchFrom').innerHTML = `
+				<option value="${branchFromId}" selected>${branchFromName}</option>`;
+			document.getElementById('editBranchTo').innerHTML = `
+				<option value="${branchToId}" selected>${branchToName}</option>`;
+
+			const tbody = document.getElementById('editProductsTbody');
+			tbody.innerHTML = `
+				<tr>
+				<td>
+					<div class="d-flex align-items-center">
+					<a href="javascript:void(0);" class="avatar avatar-md me-2">
+						<img src="/media/uploads/${productImage}" alt="product">
+					</a>
+					<span>${productName}</span>
+					</div>
+				</td>
+				<td>${unitCode}</td>
+				<td>
+					<input type="number" name="quantity" class="form-control" value="${quantity}">
+				</td>
+				</tr>`;
+
+			if (typeof feather !== 'undefined') feather.replace();
+			});
+		});
+		});
+		</script>
+
+		<script>
+		document.addEventListener('DOMContentLoaded', () => {
+		const deleteButtons = document.querySelectorAll('[data-bs-target="#delete"]');
+		deleteButtons.forEach(btn => {
+			btn.addEventListener('click', () => {
+			const id = btn.dataset.id;
+			document.getElementById('deleteTransferId').value = id;
+			});
+		});
+		});
+		</script>
+
+
+
 		<!-- jQuery -->
         <script src="assets/js/jquery-3.7.1.min.js" type="aeefd15cc0c25532d2598a2d-text/javascript"></script>
 

@@ -153,12 +153,19 @@
 										<td>₦<%= (stock.grand_total - stock.paid_amount) || 0 %></td>
 										<td class="action-table-data">
 											<div class="edit-delete-action">
-												<a class="me-2 p-2" href="javascript:void(0);">
-													<i data-feather="eye" class="action-eye"></i>
-												</a>
-												<a class="me-2 p-2" data-bs-toggle="modal" data-bs-target="#edit-purchase">
+												<a class="me-2 p-2 edit-btn"
+													href="javascript:void(0);"
+													data-id="<%= stock._id %>"
+													data-supplier="<%= stock.supplier._id %>"
+													data-invoice="<%= stock.invoice_number %>"
+													data-payment_date="<%= stock.payment_date ? new Date(stock.payment_date).toISOString().substr(0,10) : '' %>"
+													data-grand_total="<%= stock.grand_total %>"
+													data-paid_amount="<%= stock.paid_amount %>"
+													data-items='<%- JSON.stringify(stock.items) %>'
+													data-bs-toggle="modal" data-bs-target="#edit-purchase">
 													<i data-feather="edit" class="feather-edit"></i>
 												</a>
+
 												<a data-bs-toggle="modal" data-bs-target="#delete-modal" class="p-2" href="javascript:void(0);">
 													<i data-feather="trash-2" class="feather-trash-2"></i>
 												</a>
@@ -453,6 +460,145 @@
 	</div>
 	<!-- /Add Purchase -->
 
+
+
+	<!-- Edit Purchase -->
+	<div class="modal fade" id="edit-purchase">
+		<div class="modal-dialog purchase modal-dialog-centered">
+			<div class="modal-content">
+				<div class="modal-header">
+					<div class="page-title">
+						<h4>Update Purchase</h4>
+					</div>
+					<button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+				</div>
+				<form action="/updateReceiveStock" method="post">
+					<div class="modal-body">
+						<div class="row">
+							<div class="col-lg-4 col-md-6 col-sm-12">
+								<div class="mb-3 add-product">
+									<label class="form-label">Supplier Name<span class="text-danger ms-1">*</span></label>
+									<div class="row">
+										<div class="col-lg-10 col-sm-10 col-10">
+										    <% if (suppliers && suppliers.length > 0) { %>
+												<select name="supplier" class="select">
+													<option value="">Select Supplier</option>
+													<% suppliers.forEach(supplier => { %>
+													<option value="<%= supplier._id %>"><%= supplier.supplier %></option>
+													<% }) %>
+												</select>
+												<% } else { %>
+												<p class="text-red-500">No suppliers available.</p>
+												<% } %>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div class="col-lg-4 col-md-6 col-sm-12">
+								<div class="mb-3 add-product">
+									<label class="form-label">Branch<span class="text-danger ms-1">*</span></label>
+									<div class="row">
+										<div class="col-lg-10 col-sm-10 col-10">
+											<select class="select">
+												<option> <%= ownerBranch && ownerBranch.branch && ownerBranch.branch.branch_name 
+													? ownerBranch.branch.branch_name 
+													: 'N/A' %>
+												</option>
+											</select>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div class="col-lg-4 col-md-6 col-sm-12">
+								<div class="mb-3">
+									<label class="form-label">Date<span class="text-danger ms-1">*</span></label>
+
+									<div class="input-groupicon calender-input">
+										<input name="payment_date" id="payment_date" type="date" class="form-control p-2" placeholder="dd/mm/yyyy">
+									</div>
+								</div>
+							</div>
+							<div class="col-lg-4 col-sm-12">
+								<div class="mb-3">
+									<label class="form-label">Invoice Number<span class="text-danger ms-1">*</span></label>
+									<input name="invoice_number" id="invoice_number" type="text" class="form-control">
+								</div>
+							</div>
+						</div>
+						<div class="row">
+							<div class="col-lg-12">
+								<div class="modal-body-table mt-3">
+									<div class="table-responsive">
+										<table class="table datatable rounded-1">
+											<thead>
+												<tr>
+													<th class="bg-secondary-transparent p-3">Product</th>
+													<th class="bg-secondary-transparent p-3">Unit</th>
+													<th class="bg-secondary-transparent p-3">Qty</th>
+													<th class="bg-secondary-transparent p-3">Unit Cost(₦)</th>
+													<th class="bg-secondary-transparent p-3">Total Cost(₦)</th>
+													<th class="bg-secondary-transparent p-3">Action</th>
+												</tr>
+											</thead>
+
+											<tbody id="editItemTableBody">
+												<tr class="item-row">
+													<td class="p-2 border relative">
+													<input type="text" placeholder="Item Name" name="item_name" class="w-full border rounded px-2 py-1 item-name" autocomplete="off" />
+													<input type="hidden" name="product_id" class="product-id-hidden" />
+													<div class="autocomplete-suggestions absolute z-10 bg-white border mt-1 w-full shadow rounded hidden"></div>
+													</td>
+													<td class="p-2 border">
+													<input type="text" name="unitCode" class="w-full border rounded px-2 py-1 text-sm text-gray-700 unit-code" readonly />
+													</td>
+													<td class="p-2 border">
+													<input type="number" name="item_qty" class="w-full border rounded px-2 py-1 item-qty" />
+													</td>
+													<td class="p-2 border">
+													<input type="number" name="item_rate" class="w-full border rounded px-2 py-1 item-rate" />
+													</td>
+													<td class="p-2 border">
+													<input type="text" value="" class="w-full border bg-gray-100 rounded px-2 py-1 item-total" readonly />
+													</td>
+													<td class="p-2 border text-center">
+													<button type="button" style="background-color: red;" class="bg-red-500 hover:bg-red-600 text-white rounded px-3 py-1 delete-row">Delete</button>
+													</td>
+												</tr>
+											</tbody>
+										</table>
+									</div>
+								</div>
+
+							</div>
+							<div class="row" style="display: flex; flex-direction: column; align-items: flex-end;">
+								<div class="col-lg-3 col-md-6 col-sm-12">
+									<div class="mb-3">
+										<label class="form-label">Grand Total<span class="text-danger ms-1">*</span></label>
+										<input type="text" id="grandTotal" readonly class="form-control bg-gray-100">
+									</div>
+								</div>
+								<div class="col-lg-3 col-md-6 col-sm-12">
+									<div class="mb-3">
+										<label class="form-label">Paid Amount<span class="text-danger ms-1">*</span></label>
+										<input type="text" name="paid_amount" value="0.00" class="form-control">
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn me-2 btn-secondary" data-bs-dismiss="modal">Cancel</button>
+						<button type="submit" class="btn btn-primary">Update</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+	
+	<!-- /Edit Purchase -->
+
 	<!-- Add Supplier -->
 	<div class="modal fade" id="add_customer">
 		<div class="modal-dialog modal-dialog-centered">
@@ -481,188 +627,6 @@
 		</div>
 	</div>
 	<!-- /Add Supplier -->
-
-	<!-- Edit Purchase -->
-	<div class="modal fade" id="edit-purchase">
-		<div class="modal-dialog purchase modal-dialog-centered">
-			<div class="modal-content">
-				<div class="modal-header">
-					<div class="page-title">
-						<h4>Edit Purchase</h4>
-					</div>
-					<button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
-						<span aria-hidden="true">&times;</span>
-					</button>
-				</div>
-				<form action="https://dreamspos.dreamstechnologies.com/html/template/purchase-list.html">
-					<div class="modal-body">
-						<div class="row">
-							<div class="col-lg-4 col-md-6 col-sm-12">
-								<div class="mb-3 add-product">
-									<label class="form-label">Supplier Name<span class="text-danger ms-1">*</span></label>
-									<div class="row">
-										<div class="col-lg-10 col-sm-10 col-10">
-											<select class="select">
-												<option>Select</option>
-												<option>Apex Computers</option>
-												<option>Dazzle Shoes</option>
-												<option>Best Accessories</option>
-											</select>
-										</div>
-										<div class="col-lg-2 col-sm-2 col-2 ps-0">
-											<div class="add-icon tab">
-												<a href="javascript:void(0);"><i data-feather="plus-circle" class="feather-plus-circles"></i></a>
-											</div>
-										</div>
-									</div>
-								</div>
-							</div>
-							<div class="col-lg-4 col-md-6 col-sm-12">
-								<div class="mb-3">
-									<label class="form-label">Date<span class="text-danger ms-1">*</span></label>
-
-									<div class="input-groupicon calender-input">
-										<i data-feather="calendar" class="info-img"></i>
-										<input type="text" class="datetimepicker form-control p-2" placeholder="24 Dec 2024">
-									</div>
-								</div>
-							</div>
-							<div class="col-lg-4 col-sm-12">
-								<div class="mb-3">
-									<label class="form-label">Supplier<span class="text-danger ms-1">*</span></label>
-									<input type="text" class="form-control" value="Elite Retail">
-								</div>
-							</div>
-						</div>
-						<div class="row">
-							<div class="col-lg-12">
-								<div class="mb-3">
-									<label class="form-label">Product<span class="text-danger ms-1">*</span></label>
-									<input type="text" class="form-control" placeholder="Search Product">
-								</div>
-							</div>
-							<div class="col-lg-12">
-							<div class="modal-body-table">
-								<div class="table-responsive">
-									<table class="table">
-										<thead>
-											<tr>
-												<th class="bg-secondary-transparent p-3">Product Name</th>
-												<th class="bg-secondary-transparent p-3">QTY</th>
-												<th class="bg-secondary-transparent p-3">Purchase Price($) </th>
-												<th class="bg-secondary-transparent p-3">Discount($) </th>
-												<th class="bg-secondary-transparent p-3">Tax %</th>
-												<th class="bg-secondary-transparent p-3">Tax Amount($)</th>
-												<th class="text-end bg-secondary-transparent p-3">Unit Cost($)</th>
-												<th class="text-end bg-secondary-transparent p-3">Total Cost ($) </th>
-												
-											</tr>
-										</thead>
-										<tbody>
-											<tr>
-												<td class="p-4">
-													<div class="d-flex align-items-center">
-														<a href="javascript:void(0);" class="avatar avatar-md me-2">
-															<img src="assets/img/products/stock-img-02.png" alt="product">
-														</a>
-														<a href="javascript:void(0);">Nike Jordan</a>
-													</div>
-												</td>
-												<td class="p-4"><div class="product-quantity">
-													<span class="quantity-btn">+<i data-feather="plus-circle" class="plus-circle"></i></span>
-													<input type="text" class="quntity-input" value="10">
-													<span class="quantity-btn"><i data-feather="minus-circle" class="feather-search"></i></span>
-												</div></td>
-												<td class="p-4">300</td>
-												<td class="p-4">50</td>
-												<td class="p-4">0</td>
-												<td class="p-4">0.00</td>
-												<td class="p-4">300</td>
-												<td class="p-4">600</td>
-									
-											</tr>
-										</tbody>
-									</table>
-								</div>
-							</div>
-							</div>
-						</div>
-						<div class="row">
-							<div class="col-lg-12 float-md-right">
-								<div class="total-order m-2 mb-3 ms-auto">
-									<ul class="border-1 rounded-1">
-										<li class="border-0 border-bottom">
-											<h4 class="border-0">Order Tax</h4>
-											<h5>$ 0.00</h5>
-										</li>
-										<li class="border-0 border-bottom">
-											<h4 class="border-0">Discount</h4>
-											<h5>$ 0.00</h5>
-										</li>
-										<li class="border-0 border-bottom">
-											<h4 class="border-0">Shipping</h4>
-											<h5>$ 0.00</h5>
-										</li>
-										<li class="total border-0">
-											<h4 class="border-0">Grand Total</h4>
-											<h5>$1800.00</h5>
-										</li>
-									</ul>
-								</div>
-							</div>
-						</div>
-						<div class="row">
-							<div class="col-lg-3 col-md-6 col-sm-12">
-								<div class="mb-3">
-									<label class="form-label">Order Tax<span class="text-danger ms-1">*</span></label>
-									<input type="text" class="form-control" value="0">
-								</div>
-							</div>
-							<div class="col-lg-3 col-md-6 col-sm-12">
-								<div class="mb-3">
-									<label class="form-label">Discount<span class="text-danger ms-1">*</span></label>
-									<input type="text" class="form-control" value="0">
-								</div>
-							</div>
-							<div class="col-lg-3 col-md-6 col-sm-12">
-								<div class="mb-3">
-									<label class="form-label">Shipping<span class="text-danger ms-1">*</span></label>
-									<input type="text" class="form-control" value="0">
-								</div>
-							</div>
-							<div class="col-lg-3 col-md-6 col-sm-12">
-								<div class="mb-3">
-									<label class="form-label">Status<span class="text-danger ms-1">*</span></label>
-									<select class="select">
-										<option>Select</option>
-										<option>Received</option>
-										<option>Pending</option>
-									</select>
-								</div>
-							</div>
-						</div>
-						<div class="row">
-							
-						<div class="col-lg-12">
-							<div class="mb-3 summer-description-box">
-								<label class="form-label">Description</label>
-								<div id="summernote2">
-									
-								</div>
-								<p class="mt-1">Maximum 60 Words</p>
-							</div>
-						</div>
-						</div>
-					</div>
-					<div class="modal-footer">
-						<button type="button" class="btn me-2 btn-secondary" data-bs-dismiss="modal">Cancel</button>
-						<button type="submit" class="btn btn-primary">Save Changes </button>
-					</div>
-				</form>
-			</div>
-		</div>
-	</div>
-	<!-- /Edit Purchase -->
 
 	<!-- Import Purchase -->
 	<div class="modal fade" id="view-notes">
@@ -778,15 +742,189 @@
 								<span class="rounded-circle d-inline-flex p-2 bg-danger-transparent mb-2"><i class="ti ti-trash fs-24 text-danger"></i></span>
 								<h4 class="fs-20 fw-bold mb-2 mt-1">Delete Purchase</h4>
 								<p class="mb-0 fs-16">Are you sure you want to delete purchase?</p>
-								<div class="modal-footer-btn mt-3 d-flex justify-content-center">
-									<button type="button" class="btn me-2 btn-secondary fs-13 fw-medium p-2 px-3 shadow-none" data-bs-dismiss="modal">Cancel</button>
-									<button type="submit" class="btn btn-submit fs-13 fw-medium p-2 px-3">Yes Delete</button>
-								</div>						
+								<form action="/deleteReceiveStock" method="post">
+									<input type="hidden" name="invoice_number" id="deleteInvoiceNumber" />
+									<div class="modal-footer-btn mt-3 d-flex justify-content-center">
+										<button type="button" class="btn me-2 btn-secondary" data-bs-dismiss="modal">Cancel</button>
+										<button type="submit" class="btn btn-submit">Yes Delete</button>
+									</div>
+								</form>
 						</div>
 					</div>
 				</div>
 			</div>
 		</div>
+<script>
+	document.querySelectorAll('[data-bs-target="#delete-modal"]').forEach(button => {
+  button.addEventListener('click', () => {
+    const invoice = button.closest('td').querySelector('.edit-btn').dataset.invoice;
+    document.getElementById('deleteInvoiceNumber').value = invoice;
+  });
+});
+
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const editButtons = document.querySelectorAll('.edit-btn');
+
+  editButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const supplier = btn.getAttribute('data-supplier');
+      const invoice = btn.getAttribute('data-invoice');
+      const payment_date = btn.getAttribute('data-payment_date');
+      const paid_amount = btn.getAttribute('data-paid_amount');
+      const grand_total = btn.getAttribute('data-grand_total');
+      const items = JSON.parse(btn.getAttribute('data-items') || '[]');
+
+      // Fill form fields
+      document.querySelector('#edit-purchase select[name="supplier"]').value = supplier;
+      document.querySelector('#edit-purchase #invoice_number').value = invoice;
+      document.querySelector('#edit-purchase #payment_date').value = payment_date;
+      document.querySelector('#edit-purchase input[name="paid_amount"]').value = paid_amount;
+      document.querySelector('#edit-purchase #grandTotal').value = grand_total;
+
+      // hidden stock_id
+      let hiddenId = document.querySelector('#edit-purchase input[name="stock_id"]');
+      if (!hiddenId) {
+        hiddenId = document.createElement('input');
+        hiddenId.type = 'hidden';
+        hiddenId.name = 'stock_id';
+        document.querySelector('#edit-purchase form').appendChild(hiddenId);
+      }
+      hiddenId.value = btn.getAttribute('data-id');
+
+      // fill items
+      const tbody = document.querySelector('#editItemTableBody');
+      tbody.innerHTML = '';
+
+      items.forEach(item => {
+        const row = createItemRow(item);
+        tbody.appendChild(row);
+      });
+
+      attachEventsToAllRows();
+    });
+  });
+
+  function createItemRow(item = {}) {
+    const row = document.createElement('tr');
+    row.classList.add('item-row');
+
+    row.innerHTML = `
+      <td class="p-2 border relative">
+        <input type="text" placeholder="Item Name" name="item_name" value="${item.item_name || ''}" class="w-full border rounded px-2 py-1 item-name" autocomplete="off" />
+        <input type="hidden" name="product_id" value="${item.product || ''}" class="product-id-hidden" />
+        <div class="autocomplete-suggestions absolute z-10 bg-white border mt-1 w-full shadow rounded hidden"></div>
+      </td>
+      <td class="p-2 border">
+        <input type="text" name="unitCode" value="${item.unitCode || ''}" class="w-full border rounded px-2 py-1 text-sm text-gray-700 unit-code" readonly />
+      </td>
+      <td class="p-2 border">
+        <input type="number" name="item_qty" value="${item.item_qty || ''}" class="w-full border rounded px-2 py-1 item-qty" />
+      </td>
+      <td class="p-2 border">
+        <input type="number" name="item_rate" value="${item.item_rate || ''}" class="w-full border rounded px-2 py-1 item-rate" />
+      </td>
+      <td class="p-2 border">
+        <input type="text" value="${item.item_total || ''}" class="w-full border bg-gray-100 rounded px-2 py-1 item-total" readonly />
+      </td>
+      <td class="p-2 border text-center">
+        <button type="button" style="background-color: red;" class="bg-red-500 hover:bg-red-600 text-white rounded px-3 py-1 delete-row">Delete</button>
+      </td>
+    `;
+    return row;
+  }
+
+  function attachEventsToAllRows() {
+    const tbody = document.querySelector('#editItemTableBody');
+    tbody.querySelectorAll('.item-row').forEach(row => attachEventsToRow(row));
+  }
+
+  function attachEventsToRow(row) {
+    const qtyInput = row.querySelector('.item-qty');
+    const rateInput = row.querySelector('.item-rate');
+    const deleteBtn = row.querySelector('.delete-row');
+    const nameInput = row.querySelector('.item-name');
+    const hiddenIdInput = row.querySelector('.product-id-hidden');
+    const unitCodeInput = row.querySelector('.unit-code');
+    const suggestionBox = row.querySelector('.autocomplete-suggestions');
+
+    qtyInput.addEventListener('input', () => calculateRowTotal(row));
+    rateInput.addEventListener('input', () => calculateRowTotal(row));
+
+    deleteBtn.addEventListener('click', () => {
+      const tbody = row.parentNode;
+      if (tbody.children.length > 1) {
+        row.remove();
+        calculateGrandTotal();
+      }
+    });
+
+    nameInput.addEventListener('input', function () {
+      const query = this.value.trim();
+      if (query.length < 2) {
+        suggestionBox.innerHTML = '';
+        suggestionBox.classList.add('hidden');
+        return;
+      }
+      fetch(`/search-product?q=${encodeURIComponent(query)}`)
+        .then(res => res.json())
+        .then(data => {
+          suggestionBox.innerHTML = '';
+          if (data.length === 0) {
+            suggestionBox.classList.add('hidden');
+            return;
+          }
+          data.forEach(item => {
+            const div = document.createElement('div');
+            div.textContent = item.product;
+            div.classList.add('p-2', 'hover:bg-blue-100', 'cursor-pointer', 'text-sm');
+            div.dataset.id = item._id;
+            div.dataset.unitcode = (item.variants && item.variants.length > 0) ? item.variants[0].unitCode : '';
+            div.dataset.supplierprice = item.supplierPrice || '';
+
+            div.addEventListener('mousedown', function () {
+              nameInput.value = item.product;
+              hiddenIdInput.value = item._id;
+              unitCodeInput.value = div.dataset.unitcode;
+              if (item.supplierPrice) {
+                rateInput.value = item.supplierprice;
+              }
+              calculateRowTotal(row);
+              suggestionBox.innerHTML = '';
+              suggestionBox.classList.add('hidden');
+            });
+            suggestionBox.appendChild(div);
+          });
+          suggestionBox.classList.remove('hidden');
+        }).catch(err => console.error('Autocomplete error:', err));
+    });
+
+    nameInput.addEventListener('blur', () => {
+      setTimeout(() => suggestionBox.classList.add('hidden'), 100);
+    });
+
+    calculateRowTotal(row); // initial calculation
+  }
+
+  function calculateRowTotal(row) {
+    const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+    const rate = parseFloat(row.querySelector('.item-rate').value) || 0;
+    const total = qty * rate;
+    row.querySelector('.item-total').value = total.toFixed(2);
+    calculateGrandTotal();
+  }
+
+  function calculateGrandTotal() {
+    let grandTotal = 0;
+    document.querySelectorAll('#editItemTableBody .item-total').forEach(input => {
+      grandTotal += parseFloat(input.value) || 0;
+    });
+    document.querySelector('#edit-purchase #grandTotal').value = grandTotal.toFixed(2);
+    document.querySelector('#edit-purchase input[name="paid_amount"]').value = grandTotal.toFixed(2);
+  }
+});
+</script>
 
 
 	<!-- jQuery -->

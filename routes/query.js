@@ -252,7 +252,7 @@ router.get('/search-products', async (req, res) => {
   const query = req.query.q;
   if (!query) return res.json([]);
 
-  const branchId = req.user.branch; // Adjust based on where branch is stored
+  const branchId = req.user.branch; // Adjust based on your auth setup
 
   if (!branchId) {
     return res.status(400).json({ error: 'Branch not specified' });
@@ -260,8 +260,8 @@ router.get('/search-products', async (req, res) => {
 
   try {
     const products = await Product.find({
-      branch: branchId,             // Filter by branch here
-      product: { $regex: query, $options: "i" }
+      branch: branchId,
+      product: { $regex: new RegExp(query, 'i') }  // this will match anywhere, case-insensitive
     }).limit(10);
 
     const productsWithAvailableQty = products.map(product => {
@@ -275,6 +275,7 @@ router.get('/search-products', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 
 module.exports = router;

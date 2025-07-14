@@ -1,55 +1,236 @@
-<% if (entries && entries.length > 0) { %>
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table datatable">
-        <thead class="thead-light">
-          <tr>						
-            <th>Date</th>
-            <th>Product Name</th>
-            <th>Transaction ID</th>
-            <th>Purchase Qty</th>
-          </tr>
-        </thead>
-        <tbody>
-        <% entries.forEach(entry => { %>
-            <tr>
-            <td class="p-3"><%= entry.customer.customer_name %></td>
-            <td class="p-3"><%= new Date(entry.date).toDateString() %></td>
-            <td class="p-3"><%= entry.type %></td>
-            <td class="p-3"><%= entry.refNo %></td>
-            <td class="p-3">
-                <% if (entry.type === 'credit-sales' || entry.type === 'paid-sales') { %>
-                ₦<%= entry.amount.toLocaleString() %>
-                <% } else { %>
-                -
-                <% } %>
-            </td>
-            <td class="p-3">
-                <% if (entry.type === 'payment') { %>
-                ₦<%= entry.paid.toLocaleString() %>
-                <% } else { %>
-                -
-                <% } %>
-            </td>
-            <td class="p-3">
-                <% 
-                const debt = entry.debtBalance || 0;
-                const main = entry.mainBalance || 0;
-                %>
-                <% if (debt > 0) { %>
-                <span class="text-danger">-₦<%= debt.toLocaleString() %></span>
-                <% } else if (main > 0) { %>
-                <span class="text-primary">+₦<%= main.toLocaleString() %></span>
-                <% } else { %>
-                ₦0
-                <% } %>
-            </td>
-            </tr>
-        <% }) %>
-        </tbody>
-      </table>
-    </div>
-  </div>
-<% } else if (startDate && endDate && customerId) { %>
-  <div class="alert alert-warning text-center mt-3">No records found for this supplier within the selected date range.</div>
-<% } %>
+router.post("/addInvoice", async (req, res, next) => {
+  const roundToTwo = num => Math.round((num + Number.EPSILON) * 100) / 100;
+
+  let {
+    customer_id,
+    customer_name,
+    mobile,
+    email,
+    address,
+    credit_limit,
+    payment_date,
+    sales_type,
+    discount = 0,
+    product,
+    qty,
+    unitcode,
+    rate,
+    total,
+    payment_type,
+    grand_total,
+    paid_amount
+  } = req.body;
+
+  // ensure all product fields are arrays
+  if (!Array.isArray(product)) product = [product];
+  if (!Array.isArray(qty)) qty = [qty];
+  if (!Array.isArray(unitcode)) unitcode = [unitcode];
+  if (!Array.isArray(rate)) rate = [rate];
+  if (!Array.isArray(total)) total = [total];
+
+  // filter out empty product names
+  const filtered = product.map((p, i) => ({
+    product: p?.trim(),
+    qty: qty[i],
+    unitcode: unitcode[i],
+    rate: rate[i],
+    total: total[i]
+  })).filter(item => item.product);
+
+  // unpack filtered back into arrays
+  product   = filtered.map(f => f.product);
+  qty       = filtered.map(f => f.qty);
+  unitcode  = filtered.map(f => f.unitcode);
+  rate      = filtered.map(f => f.rate);
+  total     = filtered.map(f => f.total);
+
+  const len = product.length;
+  if ([qty, unitcode, rate, total].some(arr => arr.length !== len)) {
+    return next({ status: 400, message: 'Product detail arrays must have the same length after filtering' });
+  }
+
+  const branchId = req.user.branch;
+  if (!branchId) return next({ status: 400, message: 'Branch ID not found on user' });
+
+  const grandTotalNum = roundToTwo(Number(grand_total));
+  const paidAmountNum = roundToTwo(Number(paid_amount));
+  const remainingAmount = roundToTwo(grandTotalNum - paidAmountNum);
+
+  const items = [];
+  let generatedInvoiceNo, generatedReceiptNo, savedInvoice;
+
+  try {
+    const branch = await Branch.findById(branchId);
+    if (!branch) throw { status: 404, message: 'Branch not found' };
+
+    const prefix = branch.branch_name.toUpperCase().slice(0, 2);
+
+    // generate invoice number
+    const invoicePrefix = `INV-${prefix}-`;
+    const latestInvoice = await Invoice.findOne({ invoice_no: { $regex: `^${invoicePrefix}` } }).sort({ createdAt: -1 });
+    const nextInvoiceNum = latestInvoice?.invoice_no?.match(/\d+$/)
+      ? parseInt(latestInvoice.invoice_no.match(/\d+$/)[0]) + 1 : 1;
+    generatedInvoiceNo = `${invoicePrefix}${String(nextInvoiceNum).padStart(3, '0')}`;
+
+    // generate receipt number
+    const receiptPrefix = sales_type === 'cash' ? `CH-${prefix}-` : `CR-${prefix}-`;
+    const latestReceipt = await Invoice.findOne({ receipt_no: { $regex: `^${receiptPrefix}` } }).sort({ createdAt: -1 });
+    const nextReceiptNum = latestReceipt?.receipt_no?.match(/\d+$/)
+      ? parseInt(latestReceipt.receipt_no.match(/\d+$/)[0]) + 1 : 1;
+    generatedReceiptNo = `${receiptPrefix}${String(nextReceiptNum).padStart(3, '0')}`;
+
+    // get config for negative sales
+    const config = await Config.findOne({ key: "negativeSalesActive" });
+    const negativeSalesActive = config?.value === true;
+
+    // find or create customer
+    let customer = customer_id
+      ? await Customer.findById(customer_id)
+      : await Customer.create({
+          customer_name,
+          mobile,
+          email,
+          address,
+          credit_limit,
+          branch: branchId
+        });
+
+    if (!customer) throw { status: 400, message: 'Unable to identify or create customer.' };
+
+    // loop over products and save items
+    for (let i = 0; i < len; i++) {
+      const productName = product[i];
+      const soldQty = Math.round(Number(qty[i]) * 2) / 2;
+      const unitCode = unitcode[i];
+      const itemRate = roundToTwo(Number(rate[i]));
+      const itemTotal = roundToTwo(Number(total[i]));
+
+      const productDoc = await Product.findOne({ product: productName, branch: branchId });
+      if (!productDoc) continue;
+
+      const sellingVariant = productDoc.variants.find(v => v.unitCode === unitCode);
+      if (!sellingVariant) continue;
+
+      if (!negativeSalesActive && sellingVariant.quantity < soldQty) {
+        throw { status: 400, message: `Insufficient stock for ${productName} in ${unitCode}` };
+      }
+
+      sellingVariant.quantity -= soldQty;
+
+      items.push({
+        product: productDoc._id,
+        product_name: productName,
+        qty: soldQty,
+        unitcode: unitCode,
+        rate: itemRate,
+        total: itemTotal
+      });
+
+      await productDoc.save();
+
+      // create StockLedger entry
+      await StockLedger.create({
+        product: productDoc._id,
+        branch: branchId,
+        operator: req.user._id,
+        customer: customer.customer_name,
+        date: new Date(payment_date),
+        particular: 'sales',
+        stock_ID: generatedInvoiceNo,
+        variants: productDoc.variants.map(v => ({
+          unitCode: v.unitCode,
+          stock_in: 0,
+          stock_out: v.unitCode === unitCode ? soldQty : 0,
+          balance: v.quantity,
+          cost_price: v.cost_price || 0,
+          total_sales: v.unitCode === unitCode ? itemTotal : 0
+        }))
+      });
+
+      await SalesLedger.create({
+        product: productDoc._id,
+        product_name: productName,
+        sale_date: new Date(payment_date),
+        unit: unitCode,
+        unit_price: itemRate,
+        quantity_sold: soldQty,
+        amount: itemTotal,
+        customer: customer._id,
+        customer_name: customer.customer_name,
+        receipt_no: generatedReceiptNo,
+        instock_qty: sellingVariant.quantity,
+        branch: branchId,
+        operator: req.user._id,
+        sales_type 
+      });
+    }
+
+    // save invoice
+    savedInvoice = await Invoice.create({
+      customer_id: customer._id,
+      customer_name: customer.customer_name,
+      mobile,
+      email,
+      address,
+      credit_limit,
+      payment_date,
+      sales_type,
+      discount: Number(discount) || 0,
+      items,
+      payment_type,
+      grand_total: grandTotalNum,
+      paid_amount: paidAmountNum,
+      remaining_amount: remainingAmount,
+      invoice_no: generatedInvoiceNo,
+      receipt_no: generatedReceiptNo,
+      user: req.user._id,
+      branch: branchId,
+      createdBy: req.user._id
+    });
+
+    // update customer ledger & customer balance
+    const lastLedger = await CustomerLedger.findOne({ customer: customer._id, branch: branchId }).sort({ createdAt: -1 });
+    let prevBalance = lastLedger ? lastLedger.Balance : 0;
+    let newBalance = prevBalance;
+
+    if (sales_type === 'credit') {
+      newBalance = prevBalance - remainingAmount;
+      customer.total_debt = newBalance;
+      customer.remaining_amount = newBalance;
+      customer.sales_type = 'credit';
+      customer.credit_sales_count = (customer.credit_sales_count || 0) + 1;
+
+      await CustomerLedger.create({
+        customer: customer._id,
+        branch: branchId,
+        type: 'credit-sales',
+        refNo: generatedReceiptNo,
+        date: payment_date,
+        amount: grandTotalNum,
+        paid: 0,
+        Balance: newBalance
+      });
+    } else if (sales_type === 'cash') {
+      customer.sales_type = 'cash';
+      customer.cash_sales_count = (customer.cash_sales_count || 0) + 1;
+
+      await CustomerLedger.create({
+        customer: customer._id,
+        branch: branchId,
+        type: 'paid-sales',
+        refNo: generatedReceiptNo,
+        date: payment_date,
+        amount: grandTotalNum,
+        paid: 0,
+        Balance: prevBalance
+      });
+    }
+
+    await customer.save();
+
+    res.redirect(`/receipt/${savedInvoice._id}`);
+  } catch (err) {
+    console.error("Error in /addInvoice:", err);
+    next(err);
+  }
+});

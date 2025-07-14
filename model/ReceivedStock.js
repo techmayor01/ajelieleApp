@@ -16,6 +16,11 @@ const receivedStockSchema = new Schema({
     ref: 'Branch',
     required: true,
   },
+  operator: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
   payment_date: {
     type: Date,
     required: true,

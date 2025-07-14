@@ -11,8 +11,6 @@
 	<meta name="author" content="Dreams Technologies">
 	<meta name="robots" content="index, follow">
 	<title>Dreams POS - Inventory Management & Admin Dashboard Template</title>
-
-	<script src="assets/js/theme-script.js" type="12df2950eee27beedfe6ed90-text/javascript"></script>
 	
 	<!-- Favicon -->
 	<link rel="shortcut icon" type="image/x-icon" href="assets/img/favicon.png">
@@ -89,61 +87,100 @@
 
 				<!-- /product list -->
 				<div class="card">
-					<div class="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-						<div class="search-set">
+					<div class="card-header d-flex align-items-center flex-wrap gap-3">
+						<div class="search-set" style="margin-right: 350px;">
 							<div class="search-input">
 								<span class="btn-searchset"><i class="ti ti-search fs-14 feather-search"></i></span>
 							</div>
 						</div>
-						<div class="d-flex table-dropdown my-xl-auto right-content align-items-center flex-wrap row-gap-3">
-							<div class="dropdown">
-								<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
-									Sort By : Last 7 Days
+						<div class="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
+						<div class="dropdown">
+							<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
+							Switch Branch
+							</a>
+							<ul class="dropdown-menu dropdown-menu-end p-3">
+							<% branches.forEach(branch => { %>
+								<li>
+								<a 
+									href="?branchId=<%= branch._id %><% if (currentSort) { %>&sort=<%= currentSort %><% } %>" 
+									class="dropdown-item rounded-1">
+									<%= branch.branch_name %>
 								</a>
-								<ul class="dropdown-menu  dropdown-menu-end p-3">
-									<li>
-										<a href="javascript:void(0);" class="dropdown-item rounded-1">Recently Added</a>
-									</li>
-									<li>
-										<a href="javascript:void(0);" class="dropdown-item rounded-1">Ascending</a>
-									</li>
-									<li>
-										<a href="javascript:void(0);" class="dropdown-item rounded-1">Desending</a>
-									</li>
-									<li>
-										<a href="javascript:void(0);" class="dropdown-item rounded-1">Last Month</a>
-									</li>
-									<li>
-										<a href="javascript:void(0);" class="dropdown-item rounded-1">Last 7 Days</a>
-									</li>
-								</ul>
-							</div>
+								</li>
+							<% }) %>
+							</ul>
+						</div>
+						</div>
+
+						<div class="d-flex table-dropdown my-xl-auto right-content align-items-center flex-wrap row-gap-3">
+						<div class="dropdown">
+							<a href="#" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
+							Sort By :
+							<% if (currentSort === "today") { %> Today
+							<% } else if (currentSort === "lastMonth") { %> Last Month
+							<% } else if (currentSort === "last7days") { %> Last 7 Days
+							<% } else { %> Recently Added <% } %>
+							</a>
+							<ul class="dropdown-menu dropdown-menu-end p-3">
+							<li>
+								<a href="?sort=today" class="dropdown-item rounded-1">Today</a>
+							</li>
+							<li>
+								<a href="?sort=lastMonth" class="dropdown-item rounded-1">Last Month</a>
+							</li>
+							<li>
+								<a href="?sort=last7days" class="dropdown-item rounded-1">Last 7 Days</a>
+							</li>
+							<li>
+								<a href="?sort=recently" class="dropdown-item rounded-1">Recently Added</a>
+							</li>
+							<li>
+								<a href="?sort=ascending" class="dropdown-item rounded-1">Ascending</a>
+							</li>
+							<li>
+								<a href="?sort=descending" class="dropdown-item rounded-1">Descending</a>
+							</li>
+							</ul>
+						</div>
 						</div>
 					</div>
 					<div class="card-body p-0">
 						<div class="table-responsive">
+							<!-- show branch here  -->
+							<div class="branch-info">
+								<p class="mb-0">Branch: <strong><%= ownerBranch && ownerBranch.branch && ownerBranch.branch.branch_name ? ownerBranch.branch.branch_name : 'N/A' %></strong></p>
+							</div>
 							<table class="table datatable">
-								<thead class="thead-light">
+							<thead class="thead-light">
+								<tr>
+								<th>Supplier</th>
+								<th>Product</th>
+								<th>Purchased Amount</th>
+								<th>Purchased QTY</th>
+								<th>Operator</th>
+								</tr>
+							</thead>
+							<tbody>
+								<% stock.forEach(received => { %>
+								<% received.items.forEach(item => { %>
 									<tr>
-										<th>Product</th>
-										<th>Purchased Amount</th>
-										<th>Purchased QTY</th>
-										<th>Instock QTY</th>
+									<td>
+										<%= received.supplier && received.supplier.supplier 
+											? received.supplier.supplier 
+											: 'N/A' %>
+									</td>
+									<td><%= item.item_name %></td>
+									<td>₦<%= item.item_rate %></td>
+									<td><%= item.item_qty %></td>
+									<td>
+										<%= received.operator && received.operator.fullname 
+											? received.operator.fullname 
+											: 'N/A' %>
+									</td>
 									</tr>
-								</thead>
-								<tbody>
-									<tr>
-										<td class="d-flex align-items-center p-3 px-2">
-											<a class="avatar avatar-md me-2">
-												<img src="assets/img/products/stock-img-01.png" alt="product">
-											</a>
-											<a href="javascript:void(0);">Lenovo IdeaPad 3</a>
-										</td>
-										<td>$1000</td>
-										<td>40</td>
-										<td>30</td>
-									</tr>
-								</tbody>
+								<% }) %>
+								<% }) %>
+							</tbody>
 							</table>
 						</div>
 					</div>
