@@ -91,21 +91,6 @@
 									<span class="btn-searchset"><i class="ti ti-search fs-14 feather-search"></i></span>
 								</div>
 							</div>
-							<div class="table-dropdown my-xl-auto right-content">
-								<div class="dropdown">
-									<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
-										Status
-									</a>
-									<ul class="dropdown-menu  dropdown-menu-end p-3">
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Active</a>
-										</li>
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item rounded-1">Inactive</a>
-										</li>
-									</ul>
-								</div>
-							</div>
 						</div>
 						<div class="card-body p-0">
 							<div class="table-responsive">
@@ -115,7 +100,6 @@
 											<th>Unit</th>
 											<th>No of Products</th>
 											<th>Created Date</th>
-											<th>Status</th>
 											<th class="no-sort"></th>
 										</tr>
 									</thead>
@@ -129,13 +113,6 @@
                                                  <%= new Date(unit.createdAt).toLocaleDateString("en-GB", {
                                                         day: "2-digit", month: "short", year: "numeric"
                                                     }) %>
-                                            </td>
-											<td>
-                                                <span class="badge table-badge 
-                                                    <%= unit.status === 'Active' ? 'bg-success' : 'bg-danger' %> 
-                                                    fw-medium fs-10">
-                                                    <%= unit.status %>
-                                                </span>
                                             </td>
 											<td class="action-table-data">
 												<div class="edit-delete-action">

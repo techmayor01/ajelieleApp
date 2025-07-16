@@ -97,7 +97,13 @@ router.get("/dashboard", async (req, res) => {
       dateFilter = { createdAt: { $gte: lastMonth } };
     }
 
-    // 🟩 Fetch all data in parallel
+    // 🟩 Fetch all branches
+    const allBranches = await Branch.find();
+
+    // 🟩 Find the selected branch doc
+    const branchDoc = allBranches.find(b => b._id.equals(selectedBranchId));
+
+    // 🟩 Fetch all dashboard data in parallel
     const [
       totalCustomers,
       totalSuppliers,
@@ -113,14 +119,11 @@ router.get("/dashboard", async (req, res) => {
       totalExpensesAmount,
       totalStockValue,
       pendingInvoices,
-      allBranches,
       totalOrders,
       lowStockProducts,
       totalDebtRepayments,
       totalLoan,
       profitData,
-
-      // 🆕 Top selling products
       topSellingProducts
     ] = await Promise.all([
       Customer.countDocuments({ branch: selectedBranchId }),
@@ -160,7 +163,6 @@ router.get("/dashboard", async (req, res) => {
       ]),
 
       SupplierInvoice.find({ branch: selectedBranchId, status: "Pending" }).limit(5),
-      Branch.find(),
 
       Invoice.countDocuments({ branch: selectedBranchId, ...dateFilter }),
 
@@ -224,7 +226,6 @@ router.get("/dashboard", async (req, res) => {
         }
       ]),
 
-      // ✅ Fixed Top selling products: use correct image field
       Invoice.aggregate([
         { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), ...dateFilter } },
         { $unwind: "$products" },
@@ -247,7 +248,7 @@ router.get("/dashboard", async (req, res) => {
         {
           $project: {
             productName: "$product.product",
-            image: "$product.product_image",   // ✅ fixed field here
+            image: "$product.product_image",
             totalSold: 1,
             totalAmount: 1
           }
@@ -292,7 +293,8 @@ router.get("/dashboard", async (req, res) => {
       dashboardData,
       branches: allBranches,
       currentSort: sortFilter,
-      selectedBranchId
+      selectedBranchId,
+      ownerBranch: { branch: branchDoc } // ✅ pass selected branch doc here
     });
 
   } catch (err) {
@@ -728,19 +730,69 @@ router.post('/addinvoiceSuppliers', async (req, res) => {
 
 
 
-router.post('/editInvoiceSuppliers', (req, res) => {
-  const { invoiceId, supplier, invoice_type, amount, payment_date, reason } = req.body;
+router.post('/editInvoiceSuppliers', async (req, res) => {
+  try {
+    const { invoiceId, supplier, invoice_type, amount, payment_date, reason } = req.body;
 
-  SupplierInvoice.updateOne(
-    { _id: invoiceId },
-    { supplier, invoice_type, amount, payment_date, reason }
-  )
-    .then(() => res.redirect('/SuppliersInvoice'))
-    .catch(err => {
-      console.error('Invoice update failed:', err);
-      res.status(500).send('Update failed.');
-    });
+    const amt = Number(amount);
+
+    await SupplierInvoice.updateOne(
+      { _id: invoiceId },
+      { supplier, invoice_type, amount: amt, payment_date, reason }
+    );
+
+    const ledgerEntry = await SupplierLedger.findOne({ refNo: reason, supplier });
+    if (!ledgerEntry) {
+      return res.status(404).send('Ledger entry not found.');
+    }
+
+    ledgerEntry.type = invoice_type;
+    ledgerEntry.status = 'edited';
+
+    if (invoice_type === 'debit') {
+      ledgerEntry.amount = amt;
+      ledgerEntry.paid = 0;
+    } else if (invoice_type === 'credit') {
+      ledgerEntry.amount = 0;
+      ledgerEntry.paid = amt;
+    } else {
+      return res.status(400).send('Invalid invoice type.');
+    }
+
+
+    await ledgerEntry.save();
+    const branch = ledgerEntry.branch;
+    const allLedgerEntries = await SupplierLedger.find({ supplier, branch }).sort({ date: 1, createdAt: 1 });
+
+    let runningBalance = 0;
+    for (const entry of allLedgerEntries) {
+      if (entry._id.equals(ledgerEntry._id)) {
+        if (invoice_type === 'debit') {
+          runningBalance += amt;
+        } else if (invoice_type === 'credit') {
+          runningBalance -= amt;
+        }
+      } else {
+        if (entry.type === 'debit') {
+          runningBalance += entry.amount;
+        } else if (entry.type === 'credit') {
+          runningBalance -= entry.paid;
+        }
+      }
+
+      entry.Balance = runningBalance;
+      await entry.save();
+    }
+
+    return res.redirect('/SuppliersInvoice');
+
+  } catch (err) {
+    console.error('Invoice update failed:', err);
+    res.status(500).send('Update failed.');
+  }
 });
+
+
 
 router.post('/deleteInvoiceSupplier', (req, res) => {
   SupplierInvoice.findByIdAndDelete(req.body.invoiceId)
@@ -1101,6 +1153,9 @@ router.get("/manageProduct", (req, res) => {
           Branch.find().then(allBranches => {
             const branchToFilter = selectedBranchId || user.branch._id;
 
+            // 🟩 Find actual selected branch doc
+            const selectedBranchDoc = allBranches.find(b => b._id.equals(branchToFilter));
+
             Product.find({ branch: branchToFilter })
               .populate('category')
               .populate('branch')
@@ -1108,13 +1163,21 @@ router.get("/manageProduct", (req, res) => {
               .then(products => {
                 res.render("Product/manageProduct", {
                   user,
-                  ownerBranch: { branch: user.branch },
+                  ownerBranch: { branch: selectedBranchDoc },   // ✅ use actual selected branch
                   branches: allBranches,
                   selectedBranchId: branchToFilter,
                   products,
                   units // ✅ pass units to frontend
                 });
+              })
+              .catch(err => {
+                console.error(err);
+                res.redirect("/error-404");
               });
+          })
+          .catch(err => {
+            console.error(err);
+            res.redirect("/error-404");
           });
         } else {
           Product.find({ branch: user.branch._id })
@@ -1128,11 +1191,18 @@ router.get("/manageProduct", (req, res) => {
                 branches: [user.branch],
                 selectedBranchId: user.branch._id,
                 products,
-                units // ✅ pass units to frontend
+                units
               });
+            })
+            .catch(err => {
+              console.error(err);
+              res.redirect("/error-404");
             });
         }
 
+      }).catch(err => {
+        console.error(err);
+        res.redirect("/error-404");
       });
 
     })
@@ -1141,6 +1211,7 @@ router.get("/manageProduct", (req, res) => {
       res.redirect("/error-404");
     });
 });
+
 
 
 router.post("/addProduct", upload.single("product_image"), (req, res, next) => {
@@ -1696,6 +1767,9 @@ router.get('/price-adjustments', async (req, res) => {
       const allBranches = await Branch.find();
       const branchToUse = selectedBranchId || user.branch._id;
 
+      // 🟩 find actual selected branch doc
+      const selectedBranchDoc = allBranches.find(b => b._id.equals(branchToUse));
+
       // get products of selected branch
       const products = await Product.find({ branch: branchToUse })
                                     .populate('category')
@@ -1709,7 +1783,7 @@ router.get('/price-adjustments', async (req, res) => {
 
       res.render('Product/price-adjustment', {
         user,
-        ownerBranch: { branch: user.branch },
+        ownerBranch: { branch: selectedBranchDoc },     // ✅ use actual selected branch
         branches: allBranches,
         selectedBranchId: branchToUse,
         products,
@@ -2864,6 +2938,8 @@ router.post('/deleteReceiveStock', async (req, res, next) => {
 router.get("/addUnit", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/");
 
+  const selectedBranchId = req.query.branchId;
+
   try {
     const user = await User.findById(req.user._id).populate("branch");
     if (!user) return res.redirect("/");
@@ -2871,19 +2947,26 @@ router.get("/addUnit", async (req, res) => {
     const allUnits = await Unit.find().sort({ createdAt: -1 }); // optional: latest first
 
     if (user.role === 'owner') {
-      const ownerBranch = await Branch.findById(user.branch);
+      const allBranches = await Branch.find();
+      const branchToUse = selectedBranchId || user.branch._id;
+
+      // 🟩 Find actual selected branch document
+      const selectedBranchDoc = allBranches.find(b => b._id.equals(branchToUse));
+
       return res.render("Unit/unit", {
         user,
-        ownerBranch: { branch: ownerBranch },
-        branches: [ownerBranch],
-        units: allUnits // 👈 include this
+        ownerBranch: { branch: selectedBranchDoc },  // ✅ use actual selected branch
+        branches: allBranches,
+        selectedBranchId: branchToUse,               // ✅ keep dropdown active
+        units: allUnits
       });
     } else {
       res.render("Unit/unit", {
         user,
         ownerBranch: { branch: user.branch },
         branches: [user.branch],
-        units: allUnits // 👈 include this
+        selectedBranchId: user.branch._id,
+        units: allUnits
       });
     }
   } catch (err) {
@@ -2891,6 +2974,7 @@ router.get("/addUnit", async (req, res) => {
     res.redirect("/error-404");
   }
 });
+
 
 
 router.post("/addUnit", async (req, res) => {
@@ -2945,18 +3029,21 @@ router.post("/deleteUnit/:id", async (req, res, next) => {
 router.get("/addCategory", (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/");
 
+  const selectedBranchId = req.query.branchId;
+
   User.findById(req.user._id)
     .populate("branch")
     .then(user => {
       if (!user) return res.redirect("/");
 
-      const renderCategoryPage = (branchList, ownerBranch) => {
+      const renderCategoryPage = (branchList, ownerBranch, selectedBranchIdToUse) => {
         Category.find()
           .then(categories => {
             res.render("Category/category", {
               user,
-              ownerBranch: { branch: ownerBranch },
+              ownerBranch: { branch: ownerBranch },           // ✅ pass actual selected branch
               branches: branchList,
+              selectedBranchId: selectedBranchIdToUse,        // ✅ so dropdown stays active
               categories
             });
           })
@@ -2967,23 +3054,22 @@ router.get("/addCategory", (req, res) => {
       };
 
       if (user.role === 'owner') {
-        Branch.findById(user.branch)
-          .then(ownerBranch => {
-            Branch.find()
-              .then(allBranches => {
-                renderCategoryPage(allBranches, ownerBranch);
-              })
-              .catch(err => {
-                console.error(err);
-                res.redirect("/error-404");
-              });
+        Branch.find()
+          .then(allBranches => {
+            const branchToUse = selectedBranchId || user.branch._id;
+
+            // 🟩 Find actual selected branch doc
+            const selectedBranchDoc = allBranches.find(b => b._id.equals(branchToUse));
+
+            renderCategoryPage(allBranches, selectedBranchDoc, branchToUse);
           })
           .catch(err => {
             console.error(err);
             res.redirect("/error-404");
           });
       } else {
-        renderCategoryPage([user.branch], user.branch);
+        // Staff: always own branch
+        renderCategoryPage([user.branch], user.branch, user.branch._id);
       }
     })
     .catch(err => {
@@ -3854,32 +3940,34 @@ router.get("/expiredProducts", async (req, res) => {
       const allBranches = await Branch.find();
       const branchToFilter = selectedBranchId || user.branch._id;
 
+      // 🟩 Find actual selected branch document
+      const branchDoc = allBranches.find(b => b._id.equals(branchToFilter));
+
       const expiredProducts = await Product.find({
         branch: branchToFilter,
         expDate: { $lt: currentDate }
       }).populate("branch category variants.supplier");
 
       if (expiredProducts.length > 0) {
-        const branch = allBranches.find(b => b._id.equals(branchToFilter));
         const existingNotification = await Notification.findOne({
           type: "expiredStock",
-          pageLink: `/expiredProducts?branchId=${branch._id}`,
+          pageLink: `/expiredProducts?branchId=${branchDoc._id}`,
           isDismissed: false
         });
 
         if (!existingNotification) {
           await Notification.create({
             title: "Expired Stock Alert",
-            description: `There are ${expiredProducts.length} expired product(s) at branch ${branch.branch_name}.`,
+            description: `There are ${expiredProducts.length} expired product(s) at branch ${branchDoc.branch_name}.`,
             type: "expiredStock",
-            pageLink: `/expiredProducts?branchId=${branch._id}`
+            pageLink: `/expiredProducts?branchId=${branchDoc._id}`
           });
         }
       }
 
       return res.render("ExpiredProducts/expiredProducts", {
         user,
-        ownerBranch: { branch: user.branch },
+        ownerBranch: { branch: branchDoc },     // ✅ pass actual selected branch doc
         branches: allBranches,
         selectedBranchId: branchToFilter,
         expiredProducts
@@ -3955,6 +4043,9 @@ router.get("/lowStock", async (req, res) => {
       const allBranches = await Branch.find();
       const branchToFilter = selectedBranchId || user.branch._id;
 
+      // 🟩 Find actual selected branch doc
+      const branchDoc = allBranches.find(b => b._id.equals(branchToFilter));
+
       // LOW STOCK: products with any variant quantity <= lowStockAlert
       let lowStockProducts = await Product.aggregate([
         { $match: { branch: new mongoose.Types.ObjectId(branchToFilter) } },
@@ -4011,22 +4102,20 @@ router.get("/lowStock", async (req, res) => {
         { path: "variants.supplier" }
       ]);
 
-      const branch = allBranches.find(b => b._id.equals(branchToFilter));
-
       // Notification for low stock
       if (lowStockProducts.length > 0) {
         const existingLowStockNotification = await Notification.findOne({
           type: "lowStock",
-          pageLink: `/lowStock?branchId=${branch._id}`,
+          pageLink: `/lowStock?branchId=${branchDoc._id}`,
           isDismissed: false
         });
         if (!existingLowStockNotification) {
           await Notification.create({
             title: "Low Stock Alert",
-            description: `There are ${lowStockProducts.length} low stock product(s) at branch ${branch.branch_name}.`,
+            description: `There are ${lowStockProducts.length} low stock product(s) at branch ${branchDoc.branch_name}.`,
             type: "lowStock",
-            pageLink: `/lowStock?branchId=${branch._id}`,
-            branch: branch._id
+            pageLink: `/lowStock?branchId=${branchDoc._id}`,
+            branch: branchDoc._id
           });
         }
       }
@@ -4035,23 +4124,23 @@ router.get("/lowStock", async (req, res) => {
       if (outOfStockProducts.length > 0) {
         const existingOutOfStockNotification = await Notification.findOne({
           type: "outOfStock",
-          pageLink: `/lowStock?branchId=${branch._id}`,
+          pageLink: `/lowStock?branchId=${branchDoc._id}`,
           isDismissed: false
         });
         if (!existingOutOfStockNotification) {
           await Notification.create({
             title: "Out of Stock Alert",
-            description: `There are ${outOfStockProducts.length} completely out of stock product(s) at branch ${branch.branch_name}.`,
+            description: `There are ${outOfStockProducts.length} completely out of stock product(s) at branch ${branchDoc.branch_name}.`,
             type: "outOfStock",
-            pageLink: `/lowStock?branchId=${branch._id}`,
-            branch: branch._id
+            pageLink: `/lowStock?branchId=${branchDoc._id}`,
+            branch: branchDoc._id
           });
         }
       }
 
       return res.render("LowStock/low-stock", {
         user,
-        ownerBranch: { branch: user.branch },
+        ownerBranch: { branch: branchDoc },  // ✅ pass actual selected branch
         branches: allBranches,
         selectedBranchId: branchToFilter,
         lowStockProducts,
@@ -4162,6 +4251,7 @@ router.get("/lowStock", async (req, res) => {
     res.redirect("/error-404");
   }
 });
+
 
 // LOW STOCK ROUTE ENDS HERE ----------------- TECH MAYOR GROUPS
 

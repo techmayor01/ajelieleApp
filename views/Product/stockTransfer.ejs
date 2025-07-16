@@ -86,10 +86,6 @@
 						<div class="page-btn">
 							<a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#add-stock-transfer"><i class="ti ti-circle-plus me-1"></i>Add New</a>
 						</div>
-						<div class="page-btn import">
-							<a href="#" class="btn btn-secondary color" data-bs-toggle="modal" data-bs-target="#view-notes"><i
-								data-feather="download" class="me-1"></i>Import Transfer</a>
-						</div>
 					</div>
 					<!-- /product list -->
 					<div class="card">
@@ -100,24 +96,6 @@
 								</div>
 							</div>
 							<div class="d-flex table-dropdown my-xl-auto right-content align-items-center flex-wrap gap-3">
-								<div class="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
-					<div class="dropdown">
-						<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
-						Switch Branch
-						</a>
-						<ul class="dropdown-menu dropdown-menu-end p-3">
-						<% branches.forEach(branch => { %>
-							<li>
-							<a 
-								href="?branchId=<%= branch._id %>" 
-								class="dropdown-item rounded-1">
-								<%= branch.branch_name %>
-							</a>
-							</li>
-						<% }) %>
-						</ul>
-					</div>
-								</div>
 								<div class="dropdown">
                                 <a href="#" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
                                 Sort By :
@@ -154,9 +132,6 @@
 						<div class="card-body p-0">
 							<div class="table-responsive">
 								<div class="table-responsive">
-								<div class="branch-info">
-									<p class="mb-0">Branch: <strong><%= ownerBranch && ownerBranch.branch && ownerBranch.branch.branch_name ? ownerBranch.branch.branch_name : 'N/A' %></strong></p>
-								</div>
 								<% if (Array.isArray(transfers) && transfers.length > 0) { %>
 								<table class="table datatable" id="DataTables_Table_0">
 									<thead class="thead-light">
@@ -177,30 +152,30 @@
 										<td><%= t.branch_to?.branch_name || 'N/A' %></td>
 										<td>1</td>
 										<td><%= t.quantity %></td>
-										<td>#<%= t.invoice_number %></td>
+										<td><%= t.invoice_number %></td>
 										<td><%= new Date(t.date).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' }) %></td>
 										<td>
 											<div class="edit-delete-action d-flex align-items-center justify-content-center">
-<a 
-  class="edit-transfer-btn"
-  data-id="<%= t._id %>"
-  data-product-id="<%= t.product?._id %>"
-  data-product-name="<%= t.product?.product || 'Unknown' %>"
-  data-product-image="<%= t.product?.product_image || 'default.png' %>"
-  data-unit-code="<%= t.unitCode %>"
-  data-quantity="<%= t.quantity %>"
-  data-branch-from-id="<%= t.branch_from?._id %>"
-  data-branch-from-name="<%= t.branch_from?.branch_name %>"
-  data-branch-to-id="<%= t.branch_to?._id %>"
-  data-branch-to-name="<%= t.branch_to?.branch_name %>"
-  data-invoice-number="<%= t.invoice_number %>"
-  data-date="<%= t.date.toISOString() %>"
-  data-notes="<%= t.notes || '' %>"
-  data-bs-toggle="modal"
-  data-bs-target="#edit-stock-transfer"
->
-  <i data-feather="edit"></i>
-</a>
+											<a 
+											class="edit-transfer-btn"
+											data-id="<%= t._id %>"
+											data-product-id="<%= t.product?._id %>"
+											data-product-name="<%= t.product?.product || 'Unknown' %>"
+											data-product-image="<%= t.product?.product_image || 'default.png' %>"
+											data-unit-code="<%= t.unitCode %>"
+											data-quantity="<%= t.quantity %>"
+											data-branch-from-id="<%= t.branch_from?._id %>"
+											data-branch-from-name="<%= t.branch_from?.branch_name %>"
+											data-branch-to-id="<%= t.branch_to?._id %>"
+											data-branch-to-name="<%= t.branch_to?.branch_name %>"
+											data-invoice-number="<%= t.invoice_number %>"
+											data-date="<%= t.date.toISOString() %>"
+											data-notes="<%= t.notes || '' %>"
+											data-bs-toggle="modal"
+											data-bs-target="#edit-stock-transfer"
+											>
+											<i data-feather="edit"></i>
+											</a>
 
 
 											<a class="p-2 d-flex align-items-center justify-content-between border rounded"

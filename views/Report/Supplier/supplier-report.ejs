@@ -201,7 +201,10 @@
           <tr>
             <td class="p-3"><%= report.supplier?.supplier || '-' %></td>
             <td class="p-3"><%= new Date(report.date).toLocaleDateString() %></td>
-            <td class="p-3"><%= report.type || '-' %></td>
+            <td class="p-3">
+  <%= report.type %><%= report.status && report.status !== 'normal' ? '(' + report.status + ')' : '' %>
+</td>
+
             <td class="p-3"><%= report.refNo || '-' %></td>
             <td class="p-3">
               <% if (amt > 0) { %>
