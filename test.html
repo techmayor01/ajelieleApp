@@ -234,3 +234,230 @@ router.post("/addInvoice", async (req, res, next) => {
     next(err);
   }
 });
+
+
+
+
+
+
+
+<!-- pass 3 -->
+ router.post("/addinvoice", async (req, res, next) => {
+  const roundToTwo = num => Math.round((num + Number.EPSILON) * 100) / 100;
+
+  try {
+    const branchId = req.user?.branch;
+    if (!branchId) throw { status: 400, message: "Branch not found on user" };
+
+    let {
+      customer_id,
+      customer_name,
+      payment_date,
+      sales_type,
+      payment_type,
+      discount = 0,
+      product,
+      qty,
+      unitcode,
+      rate,
+      total,
+      grand_total,
+      paid_amount
+    } = req.body;
+
+    // force arrays
+    [product, qty, unitcode, rate, total] = [product, qty, unitcode, rate, total].map(arr =>
+      Array.isArray(arr) ? arr : [arr]
+    );
+
+    // filter invalid product lines
+    const filtered = product.map((p, i) => ({
+      product: p?.trim(),
+      qty: qty[i],
+      unitcode: unitcode[i],
+      rate: rate[i],
+      total: total[i]
+    })).filter(item => item.product);
+
+    if (!filtered.length) throw { status: 400, message: "No valid product lines" };
+
+    const grandTotalNum = roundToTwo(+grand_total);
+    const paidAmountNum = roundToTwo(+paid_amount);
+    const remainingAmount = roundToTwo(grandTotalNum - paidAmountNum);
+
+    // find or create customer
+    let customer = customer_id
+      ? await Customer.findById(customer_id)
+      : await Customer.create({ customer_name, branch: branchId });
+    if (!customer) throw { status: 400, message: "Unable to find or create customer" };
+
+    // credit limit check
+    if (sales_type === 'credit') {
+      const newDebt = (customer.remaining_amount || 0) + remainingAmount;
+      if (customer.credit_limit && newDebt > customer.credit_limit) {
+        throw { status: 400, message: `Credit limit exceeded! Available: ₦${(customer.credit_limit - (customer.remaining_amount || 0)).toLocaleString()}` };
+      }
+    }
+
+    const config = await Config.findOne({ key: "negativeSalesActive" });
+    const negativeSalesAllowed = config?.value === true;
+
+    // generate invoice & receipt numbers
+    const branch = await Branch.findById(branchId);
+    const prefix = branch.branch_name.slice(0, 2).toUpperCase();
+    const [invoice_no, receipt_no] = await Promise.all([
+      generateNextNumber("invoice_no", `INV-${prefix}-`),
+      generateNextNumber("receipt_no", sales_type === 'cash' ? `CH-${prefix}-` : `CR-${prefix}-`)
+    ]);
+
+    const items = [];
+
+    for (const { product: productName, qty: qtyStr, unitcode, rate: rateStr, total: totalStr } of filtered) {
+      const soldQty = roundToTwo(+qtyStr);
+      const itemRate = roundToTwo(+rateStr);
+      const itemTotal = roundToTwo(+totalStr);
+
+      const productDoc = await Product.findOne({ product: productName, branch: branchId });
+      if (!productDoc) continue;
+
+      // always treat first variant as base
+      const baseVariant = productDoc.variants[0];
+      const sellingVariant = productDoc.variants.find(v => v.unitCode === unitcode);
+      if (!sellingVariant) continue;
+
+      // negative sales check
+      if (!negativeSalesAllowed && sellingVariant.quantity < soldQty) {
+        throw { status: 400, message: `Insufficient stock for ${productName} (${unitcode})` };
+      }
+
+      // deduct sold quantity
+      sellingVariant.quantity = sellingVariant.quantity - soldQty;
+
+      // if sold from other variant, recalculate base
+      if (sellingVariant.unitCode !== baseVariant.unitCode && sellingVariant.totalInBaseUnit) {
+        baseVariant.quantity = sellingVariant.quantity / sellingVariant.totalInBaseUnit;
+      }
+      // else: sold from base, baseVariant.quantity already reduced
+
+      // recalculate all other variants from base
+      productDoc.variants.forEach(v => {
+        if (v.unitCode !== baseVariant.unitCode && v.totalInBaseUnit) {
+          v.quantity = baseVariant.quantity * v.totalInBaseUnit;
+        }
+      });
+
+      // round all before saving
+      productDoc.variants.forEach(v => v.quantity = roundToTwo(v.quantity));
+
+      await productDoc.save();
+
+      items.push({
+        product: productDoc._id,
+        product_name: productName,
+        qty: soldQty,
+        unitcode,
+        rate: itemRate,
+        total: itemTotal
+      });
+
+      // StockLedger
+      await StockLedger.create({
+        date: new Date(payment_date),
+        product: productDoc._id,
+        branch: branchId,
+        operator: req.user._id,
+        customer: customer.customer_name,
+        stock_ID: invoice_no,
+        particular: 'Sales',
+        variants: productDoc.variants.map(v => ({
+          unitCode: v.unitCode,
+          stock_in: 0,
+          stock_out: v.unitCode === unitcode ? soldQty : 0,
+          balance: v.quantity,
+          cost_price: v.cost_price || 0,
+          total_sales: v.unitCode === unitcode ? itemTotal : 0
+        }))
+      });
+
+      // SalesLedger
+      await SalesLedger.create({
+        product: productDoc._id,
+        product_name: productName,
+        sale_date: new Date(payment_date),
+        unit: unitcode,
+        unit_price: itemRate,
+        quantity_sold: soldQty,
+        amount: itemTotal,
+        customer: customer._id,
+        customer_name: customer.customer_name,
+        receipt_no,
+        instock_qty: sellingVariant.quantity,
+        branch: branchId,
+        operator: req.user._id,
+        sales_type
+      });
+    }
+
+    // save Invoice
+    const invoiceDoc = await Invoice.create({
+      customer_id: customer._id,
+      customer_name: customer.customer_name,
+      payment_date,
+      sales_type,
+      payment_type,
+      discount: +discount || 0,
+      items,
+      grand_total: grandTotalNum,
+      paid_amount: paidAmountNum,
+      remaining_amount: remainingAmount,
+      invoice_no,
+      receipt_no,
+      branch: branchId,
+      user: req.user._id,
+      createdBy: req.user._id
+    });
+
+    // customer ledger: for credit, balance becomes negative
+    let newBalance = customer.remaining_amount || 0;
+    if (sales_type === 'credit') {
+      newBalance -= remainingAmount;
+      customer.remaining_amount = newBalance;
+
+      await CustomerLedger.create({
+        customer: customer._id,
+        branch: branchId,
+        type: 'credit-sales',
+        refNo: receipt_no,
+        date: payment_date,
+        amount: grandTotalNum,
+        paid: paidAmountNum,
+        Balance: newBalance
+      });
+    } else {
+      await CustomerLedger.create({
+        customer: customer._id,
+        branch: branchId,
+        type: 'paid-sales',
+        refNo: receipt_no,
+        date: payment_date,
+        amount: grandTotalNum,
+        paid: paidAmountNum,
+        Balance: newBalance
+      });
+    }
+
+    await customer.save();
+
+    res.redirect(`/receipt/${invoiceDoc._id}`);
+  } catch (err) {
+    console.error("Error adding invoice:", err);
+    next(err);
+  }
+
+  async function generateNextNumber(field, prefix) {
+    const last = await Invoice.findOne({ [field]: { $regex: `^${prefix}` } }).sort({ createdAt: -1 });
+    const nextNum = last?.[field]?.match(/\d+$/)
+      ? parseInt(last[field].match(/\d+$/)[0]) + 1 : 1;
+    return `${prefix}${String(nextNum).padStart(3, '0')}`;
+  }
+});
