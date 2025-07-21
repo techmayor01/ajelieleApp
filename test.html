@@ -461,3 +461,145 @@ router.post("/addInvoice", async (req, res, next) => {
     return `${prefix}${String(nextNum).padStart(3, '0')}`;
   }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+edit
+router.post('/update-invoices', async (req, res) => {
+  try {
+    const {
+      invoice_id,
+      customer_id,
+      sales_type,
+      paid_amount,
+      receipt_no,
+      payment_date
+    } = req.body;
+
+    const paid = parseFloat(paid_amount) || 0;
+    const ledgerDate = new Date(payment_date);
+
+    // 1. Find and update the original ledger entry
+    const ledger = await CustomerLedger.findOne({ refNo: receipt_no, customer: customer_id });
+    if (!ledger) return res.status(404).send('Ledger not found');
+
+    ledger.date = ledgerDate;
+    ledger.status = 'edited';
+    ledger.type = sales_type === 'credit' ? 'credit-sales' : 'paid-sales';
+    ledger.amount = sales_type === 'credit' ? -paid : paid;
+    ledger.paid = 0;
+
+    await ledger.save();
+
+    // 2. Recalculate balances only for the same customer and branch
+    const branch = ledger.branch;
+    const allEntries = await CustomerLedger.find({ customer: customer_id, branch }).sort({ date: 1, createdAt: 1 });
+
+    let runningBalance = 0;
+    for (const entry of allEntries) {
+      if (entry.type === 'credit-sales') {
+        runningBalance += entry.amount;
+        entry.Balance = runningBalance;
+      } else {
+        entry.Balance = runningBalance;
+      }
+      await entry.save();
+    }
+
+    // 3. Fully update invoice record
+    await Invoice.findByIdAndUpdate(invoice_id, {
+      customer: customer_id,
+      sales_type,
+      paid_amount: paid,
+      date: ledgerDate,
+      type: sales_type === 'credit' ? 'credit-sales' : 'paid-sales',
+      status: 'edited',
+      updatedAt: new Date()
+    });
+
+    return res.status(200).send('Invoice and ledger updated successfully');
+  } catch (err) {
+    console.error('Edit invoice error:', err);
+    res.status(500).send('Internal error');
+  }
+});
+
+
+
+
+
+trans
+router.get("/transactions", async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  try {
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/");
+
+    const branchId = user.branch._id || user.branch;
+
+    const [ownerBranch, allBranches] = user.role === 'owner'
+      ? await Promise.all([
+          Branch.findById(branchId),
+          Branch.find()
+        ])
+      : [user.branch, null];
+
+    const [customers, loans, transactionsRaw] = await Promise.all([
+      Customer.find({ branch: branchId }),
+      Loan.find({ branch: branchId }),
+      Transaction.find({ branch: branchId })
+        .sort({ paymentDate: -1 })
+        .populate("userId")
+    ]);
+
+    // Format currency helper
+    const formatCurrency = (amount) =>
+      new Intl.NumberFormat("en-NG", {
+        style: "currency",
+        currency: "NGN",
+        minimumFractionDigits: 0
+      }).format(amount);
+
+    // Format transactions with userName and currency
+    const transactions = transactionsRaw.map(tx => {
+      const userName = tx.transactionType === "Customer"
+        ? tx.userId?.customer_name
+        : tx.userId?.loaner;
+
+      return {
+        ...tx.toObject(),
+        userName,
+        expectedAmountFormatted: formatCurrency(tx.expectedAmount),
+        amountReceivedFormatted: formatCurrency(tx.amountReceived),
+        balanceRemainingFormatted: formatCurrency(tx.balanceRemaining)
+      };
+    });
+
+    res.render("Transaction/transaction", {
+      user,
+      ownerBranch: { branch: ownerBranch },
+      branches: allBranches,
+      customers,
+      loans,
+      transactions // use this in your EJS
+    });
+
+  } catch (err) {
+    console.error("Error in /transactions route:", err);
+    res.redirect("/error-404");
+  }
+});

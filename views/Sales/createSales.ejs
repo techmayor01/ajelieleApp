@@ -528,13 +528,18 @@
 												</script>
 											</div>
 											<div class="col-md-4 position-relative">
-												<input type="text" class="form-control" name="customer_name" id="customerSearch" autocomplete="off" placeholder="Search Customer">
-												<input type="hidden" name="customer_id" id="customerIdField">
-												<div id="customerSuggestions" class="list-group position-absolute w-100 z-3" style="max-height: 150px; overflow-y: auto;"></div>
+												<div class="d-flex">
+
+													<input type="text" class="form-control" name="customer_name" id="customerSearch" autocomplete="off" placeholder="Search Customer">
+													<input type="hidden" name="customer_id" id="customerIdField">
+													<div id="customerSuggestions" class="list-group position-absolute w-100 z-3" style="max-height: 150px; overflow-y: auto; top: 100%;"></div>
+													<div class="add-icon">
+														<a href="#" class="bg-dark text-white p-2 rounded" data-bs-toggle="modal" data-bs-target="#add_customer"><i data-feather="plus-circle" class="plus"></i></a>
+													</div>
+												</div>
 											</div>
 											<div class="col-md-4">
 												<select class="select" name="sales_type">
-													<option>Sales Type</option>
 													<option value="cash">Cash</option>
 													<option value="credit">Credit</option>
 												</select>
@@ -548,38 +553,42 @@
 													<option value="transfer">Bank Transfer</option>
 												</select>
 											</div>
+											<div class="col-md-6" style="display: flex; flex-direction: column;">
+												<label for="">Payment Ref</label>										
+												<textarea name="paymentRef" class="form-control" id=""></textarea>
+											</div>
 										</div>
 									</div>								
 									<div class="product-added block-section">
 										<div class="d-flex align-items-center justify-content-between gap-3 mb-3">
 											<h5 class="d-flex align-items-center mb-0">Order Details</h5>
 											<div class="badge bg-light text-gray-9 fs-12 fw-semibold py-2 border rounded">Items : <span class="text-teal" id="itemCount"></span></div>
-											<script>
-document.addEventListener("DOMContentLoaded", function () {
-  const tbody = document.querySelector("tbody");
-  const itemCountSpan = document.getElementById("itemCount");
+												<script>
+												document.addEventListener("DOMContentLoaded", function () {
+												const tbody = document.querySelector("tbody");
+												const itemCountSpan = document.getElementById("itemCount");
 
-  function updateItemCount() {
-    const rows = tbody.querySelectorAll("tr.text-sm");
-    const validRows = Array.from(rows).filter(row => {
-      const input = row.querySelector(".productSearch");
-      return input && input.value.trim() !== "";
-    });
+												function updateItemCount() {
+													const rows = tbody.querySelectorAll("tr.text-sm");
+													const validRows = Array.from(rows).filter(row => {
+													const input = row.querySelector(".productSearch");
+													return input && input.value.trim() !== "";
+													});
 
-    itemCountSpan.textContent = validRows.length;
-  }
+													itemCountSpan.textContent = validRows.length;
+												}
 
-  // Attach item count update after new product selection
-  const observer = new MutationObserver(updateItemCount);
-  observer.observe(tbody, { childList: true, subtree: true });
+												// Attach item count update after new product selection
+												const observer = new MutationObserver(updateItemCount);
+												observer.observe(tbody, { childList: true, subtree: true });
 
-  // Optional: run once on page load
-  updateItemCount();
+												// Optional: run once on page load
+												updateItemCount();
 
-  // Export if needed in other functions
-  window.updateItemCount = updateItemCount;
-});
-</script>
+												// Export if needed in other functions
+												window.updateItemCount = updateItemCount;
+												});
+												</script>
 
 										</div>
 										<div class="product-wrap">
@@ -760,6 +769,47 @@ document.addEventListener("DOMContentLoaded", function () {
 		</div>
 		<!-- /Calculator -->
 
+		<!-- Add Customer -->
+		<div class="modal fade" id="add_customer">
+			<div class="modal-dialog modal-dialog-centered">
+				<div class="modal-content">
+					<div class="modal-header">
+						<div class="page-title">
+							<h4>Add Customer</h4>
+						</div>
+						<button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+							<span aria-hidden="true">&times;</span>
+						</button>
+					</div>
+					<form action="/create-customer" method="POST">
+						<div class="modal-body">
+							<div>
+								<label class="form-label">Customer <span class="text-danger">*</span></label>
+								<input type="text" autocomplete="off" name="customer_name" class="form-control">
+							</div>												
+							<div>
+								<label class="form-label">Phone <span class="text-danger">*</span></label>
+								<input type="text" autocomplete="off" name="mobile" class="form-control">
+							</div>												
+							<div>
+								<label class="form-label">Address <span class="text-danger">*</span></label>
+								<input type="text" autocomplete="off" name="address" class="form-control">
+							</div>												
+							<div>
+								<label class="form-label">Credit Limit <span class="text-danger">*</span></label>
+								<input type="text" autocomplete="off" name="credit_limit" class="form-control">
+							</div>												
+						</div>
+						<div class="modal-footer">
+							<button type="button" class="btn me-2 btn-secondary fs-13 fw-medium p-2 px-3 shadow-none" data-bs-dismiss="modal">Cancel</button>
+							<button  type="submit" class="btn btn-primary fs-13 fw-medium p-2 px-3">Add Customer</button>
+						</div>						
+					</form>
+				</div>
+			</div>
+		</div>
+		<!-- /Add Customer -->
+
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -774,15 +824,13 @@ document.addEventListener('DOMContentLoaded', function () {
   const subtotalDisplay = document.getElementById("subtotalDisplay");
   const creditLimitDisplay = document.getElementById("creditLimitDisplay");
   const balanceDisplay = document.getElementById("balanceDisplay");
-
-  // Add this to HTML: <div id="salesWarningBox" class="text-warning mt-2"></div>
   const salesWarningBox = document.getElementById("salesWarningBox");
 
   const customerIdField = document.getElementById("customerIdField");
   const input = document.getElementById("customerSearch");
   const suggestionBox = document.getElementById("customerSuggestions");
 
-  let customerBalanceValue = 0; // shared by both parts
+  let customerBalanceValue = 0;
   let customerCreditLimit = 0;
 
   function attachProductEvents(row) {
@@ -800,20 +848,17 @@ document.addEventListener('DOMContentLoaded', function () {
         productSuggestions.classList.add("d-none");
         return;
       }
+
       try {
         const res = await fetch(`/search-products?q=${query}`);
         const products = await res.json();
         productSuggestions.innerHTML = "";
+
         products.forEach(product => {
           const li = document.createElement("li");
           li.className = "p-2 hover:bg-gray-100 cursor-pointer";
-          li.style.display = 'block';
-          li.style.width = '100%';
-          li.style.whiteSpace = 'nowrap';
-          li.style.overflow = 'hidden';
-          li.style.textOverflow = 'ellipsis';
-
           li.textContent = `${product.product} (${product.available_qty ?? 0} available)`;
+
           li.addEventListener("click", () => {
             productInput.value = product.product;
             selectedProduct = product;
@@ -835,8 +880,10 @@ document.addEventListener('DOMContentLoaded', function () {
             updateTotals();
             maybeAddNewRow(row);
           });
+
           productSuggestions.appendChild(li);
         });
+
         productSuggestions.classList.remove("d-none");
       } catch (e) {
         console.error(e);
@@ -905,36 +952,41 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  function updateTotals() {
-    let subtotal = 0;
-    tbody.querySelectorAll(".product-row:not(.d-none)").forEach(row => {
-      subtotal += parseFloat(row.querySelector("input[name='total']").value) || 0;
-    });
+function updateTotals() {
+  let subtotal = 0;
+  tbody.querySelectorAll(".product-row:not(.d-none)").forEach(row => {
+    subtotal += parseFloat(row.querySelector("input[name='total']").value) || 0;
+  });
 
-    const discount = parseFloat(discountInput?.value) || 0;
-    let salesType = salesTypeSelect?.value || "cash";
-    let grandTotal = subtotal - discount;
+  const discount = parseFloat(discountInput?.value) || 0;
+  let salesType = salesTypeSelect?.value || "cash";
+  let grandTotal = subtotal - discount;
 
-    salesWarningBox.textContent = ""; // clear warning
+  salesWarningBox.textContent = "";
 
-    if (salesType === "cash") {
-      if (customerBalanceValue < 0) {
-        grandTotal += Math.abs(customerBalanceValue);
-      } else if (customerBalanceValue > 0) {
-        salesWarningBox.textContent = `Customer has a balance of ₦${customerBalanceValue.toLocaleString()}. Switched to credit sales.`;
-        salesTypeSelect.value = "credit";
-        salesType = "credit";
-      }
-      paidAmountInput.value = grandTotal.toFixed(2);
-      paidAmountInput.setAttribute("readonly", true);
-    } else {
-      paidAmountInput.removeAttribute("readonly");
+  if (salesType === "cash") {
+    if (customerBalanceValue < 0) {
+      grandTotal += Math.abs(customerBalanceValue);
+    } else if (customerBalanceValue > 0) {
+      salesWarningBox.textContent = `Customer has a credit of ₦${customerBalanceValue.toLocaleString()}. Switched to credit sales.`;
+      salesTypeSelect.value = "credit";
+      salesType = "credit";
     }
-
-    subtotalDisplay.textContent = `₦${subtotal.toFixed(2)}`;
-    grandTotalInput.value = grandTotal.toFixed(2);
-    creditLimitDisplay.textContent = `+₦${customerCreditLimit.toLocaleString()}`;
   }
+
+  if (salesType === "credit") {
+    paidAmountInput.value = ""; // <-- Clear paid amount
+    paidAmountInput.removeAttribute("readonly");
+  } else {
+    paidAmountInput.value = grandTotal.toFixed(2);
+    paidAmountInput.setAttribute("readonly", true);
+  }
+
+  subtotalDisplay.textContent = `₦${subtotal.toFixed(2)}`;
+  grandTotalInput.value = grandTotal.toFixed(2);
+  creditLimitDisplay.textContent = `+₦${customerCreditLimit.toLocaleString()}`;
+}
+
 
   // Customer search & select
   input.addEventListener("input", function () {
@@ -963,29 +1015,40 @@ document.addEventListener('DOMContentLoaded', function () {
             customerIdField.value = customer._id;
 
             customerCreditLimit = Number(customer.credit_limit) || 0;
-            customerBalanceValue = Number(customer.remaining_amount) || 0;
+
+            // Fetch ledger balance
+            fetch(`/getCustomerBalance?customerId=${customer._id}`)
+              .then(res => res.json())
+              .then(data => {
+                customerBalanceValue = Number(data.balance) || 0;
+
+                // Display balance
+                const absBalance = Math.abs(customerBalanceValue).toLocaleString();
+                if (customerBalanceValue < 0) {
+                  balanceDisplay.textContent = `-₦${absBalance}`;
+                  balanceDisplay.classList.remove('text-primary');
+                  balanceDisplay.classList.add('text-danger');
+                } else {
+                  balanceDisplay.textContent = `+₦${absBalance}`;
+                  balanceDisplay.classList.remove('text-danger');
+                  balanceDisplay.classList.add('text-primary');
+                }
+
+                updateTotals();
+              })
+              .catch(err => {
+                console.error("Ledger fetch failed:", err);
+              });
 
             creditLimitDisplay.textContent = `+₦${customerCreditLimit.toLocaleString()}`;
-
-            if (customerBalanceValue < 0) {
-              balanceDisplay.textContent = `-₦${Math.abs(customerBalanceValue).toLocaleString()}`;
-              balanceDisplay.classList.remove('text-primary');
-              balanceDisplay.classList.add('text-danger');
-            } else {
-              balanceDisplay.textContent = `+₦${customerBalanceValue.toLocaleString()}`;
-              balanceDisplay.classList.remove('text-danger');
-              balanceDisplay.classList.add('text-primary');
-            }
-
             suggestionBox.innerHTML = '';
-            updateTotals(); // recalculate totals immediately
           });
 
           suggestionBox.appendChild(div);
         });
       })
       .catch(err => {
-        console.error("Error fetching customers:", err);
+        console.error("Customer search error:", err);
         suggestionBox.innerHTML = '';
       });
   });
@@ -1007,24 +1070,24 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
+
 <script>
 document.querySelector("form").addEventListener("submit", function (e) {
-  const tbody = document.querySelector("tbody");
-  const rows = tbody.querySelectorAll(".product-row:not(.d-none)");
+  const rows = document.querySelectorAll("tbody .product-row");
 
   rows.forEach(row => {
     const product = row.querySelector("input[name='product']")?.value.trim();
     const qty = parseFloat(row.querySelector("input[name='qty']")?.value) || 0;
-    const unit = row.querySelector("select[name='unitcode']")?.value.trim();
+    const unitcode = row.querySelector("select[name='unitcode']")?.value.trim();
 
-    const isInvalid = !product || qty <= 0 || !unit;
-
-    if (isInvalid) {
-      row.remove(); // This is key: remove the full row so browser doesn't submit its fields
+    const isEmpty = !product || qty <= 0 || !unitcode;
+    if (isEmpty) {
+      row.remove(); // fully removes the <tr> so no fields remain
     }
   });
 });
 </script>
+
 
 
 

@@ -129,12 +129,12 @@
 								<thead class="thead-light">
 									<tr>
 										<th>Customer</th>
-										<th>Reference</th>
+										<th>Invoice_no</th>
 										<th>Date</th>
 										<th>Grand Total</th>
 										<th>Paid</th>
 										<th>Due</th>
-										<th>Payment Status</th>
+										<th>Payment Ref</th>
 										<th>Biller</th>
 										<th></th>
 									</tr>
@@ -147,7 +147,7 @@
           <%= invoice.customer_name || (invoice.customer_id && invoice.customer_id.customer_name) || 'N/A' %>
         </a>
       </td>
-      <td><%= invoice.invoice_no %></td>
+      <td><%= invoice.receipt_no %></td>
       <td>
         <%= invoice.payment_date ? new Date(invoice.payment_date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '' %>
       </td>
@@ -155,15 +155,7 @@
       <td>₦<%= invoice.paid_amount?.toFixed(2) %></td>
       <td>₦<%= invoice.remaining_amount?.toFixed(2) %></td>
       <td>
-        <% if (invoice.remaining_amount > 0) { %>
-          <span class="badge badge-soft-warning shadow-none badge-xs">
-            <i class="ti ti-point-filled me-1"></i>Partial
-          </span>
-        <% } else { %>
-          <span class="badge badge-soft-success shadow-none badge-xs">
-            <i class="ti ti-point-filled me-1"></i>Paid
-          </span>
-        <% } %>
+		<%= invoice.paymentRef || 'N/A' %>
       </td>
       <td>
         <%= invoice.createdBy.role || 'N/A' %>
@@ -572,7 +564,7 @@
               </button>
             </div>
           </div>
-          <form action="/update-invoice" method="POST">
+          <form action="/update-invoices" method="POST">
             <input type="hidden" name="invoice_id" id="edit-invoice-id">
             <div class="card border-0">
               <div class="card-body pb-0">
@@ -599,6 +591,7 @@
                   <div class="col-lg-4 col-sm-6 col-12">
                     <div class="mb-3">
                       <label class="form-label">Customer Name<span class="text-danger ms-1">*</span></label>
+					  <input type="hidden" name="customer_id" id="edit-customer-id">
                       <input type="text" name="customer_name" id="edit-customer-name" class="form-control" placeholder="Customer Name">
                     </div>
                   </div>
@@ -629,15 +622,15 @@
                         </li>
                         <li class="border-bottom">
                           <h4 class="border-end">Sub Total</h4>
-                          <input type="text" id="edit-sub-total" class="form-control" placeholder="0" style="width: 50%; border: none;" readonly>
+                          <input type="text" id="edit-sub-total" class="form-control" placeholder="0" style="width: 50%; border: none;">
                         </li>
                         <li class="border-bottom">
                           <h4 class="border-end">Discount</h4>
-                          <input type="text" id="edit-discount" class="form-control" placeholder="0" style="width: 50%; border: none;" readonly>
+                          <input type="text" id="edit-discount" class="form-control" placeholder="0" style="width: 50%; border: none;">
                         </li>
                         <li class="border-bottom">
                           <h4 class="border-end">Grand Total</h4>
-                          <input type="text" id="edit-grand-total" class="form-control" placeholder="0" style="width: 50%; border: none;" readonly>
+                          <input type="text" id="edit-grand-total" class="form-control" placeholder="0" style="width: 50%; border: none;">
                         </li>
                       </ul>
                     </div>
@@ -647,8 +640,16 @@
                 <div class="row">
                   <div class="col-lg-12">
                     <div class="mb-3">
+                      <label class="form-label">Invoice<span class="text-danger ms-1">*</span></label>
+                      <textarea name="receipt_no" id="edit-receipt_no" class="form-control"></textarea>
+                    </div>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col-lg-12">
+                    <div class="mb-3">
                       <label class="form-label">Payment Ref<span class="text-danger ms-1">*</span></label>
-                      <textarea name="receipt_no" id="edit-payment-ref" class="form-control"></textarea>
+                      <textarea name="paymentRef" id="edit-payment-ref" class="form-control"></textarea>
                     </div>
                   </div>
                 </div>
@@ -911,27 +912,68 @@
 	</div>
 	<!-- /Delete -->
 <script>
+  function recalculateTotals() {
+    let subTotal = 0;
+
+    document.querySelectorAll('#edit-invoice-products tr').forEach(row => {
+      const qtyInput = row.querySelector('input[name^="items"]');
+      const unitCostCell = row.cells[5]; // 6th column = Unit Cost
+      const totalCostCell = row.cells[6]; // 7th column = Total Cost
+
+      const qty = parseFloat(qtyInput.value) || 0;
+      const rate = parseFloat(unitCostCell.textContent) || 0;
+      const total = qty * rate;
+
+      // Update total in table
+      totalCostCell.textContent = total.toFixed(2);
+
+      // Sum to subtotal
+      subTotal += total;
+    });
+
+    // Set Subtotal and Grand Total
+    document.getElementById('edit-sub-total').value = subTotal.toFixed(2);
+
+    const discount = parseFloat(document.getElementById('edit-discount').value) || 0;
+    const grandTotal = subTotal - discount;
+    document.getElementById('edit-grand-total').value = grandTotal.toFixed(2);
+  }
+
+  // Trigger recalc when qty or discount changes
+  document.addEventListener('input', e => {
+    if (e.target.matches('input[name^="items"]') || e.target.id === 'edit-discount') {
+      recalculateTotals();
+    }
+  });
+
   document.querySelectorAll('.edit-sale-btn').forEach(button => {
     button.addEventListener('click', () => {
       const invoice = JSON.parse(button.dataset.invoice);
 
-      // Set form values
-      document.getElementById('edit-invoice-id').value = invoice._id;
+      // Set base fields
+      document.getElementById('edit-invoice-id').value = invoice._id || '';
       document.getElementById('edit-customer-name').value = invoice.customer_name || '';
+      document.getElementById('edit-customer-id').value =
+        (typeof invoice.customer_id === 'object' && invoice.customer_id !== null)
+          ? invoice.customer_id._id
+          : invoice.customer_id || '';
+
       document.getElementById('edit-payment-date').value = invoice.payment_date?.split('T')[0] || '';
       document.getElementById('edit-sales-type').value = invoice.sales_type || 'cash';
       document.getElementById('edit-paid-amount').value = invoice.paid_amount || 0;
       document.getElementById('edit-grand-total').value = invoice.grand_total || 0;
-      document.getElementById('edit-sub-total').value = invoice.grand_total || 0; // change if needed
+      document.getElementById('edit-sub-total').value = invoice.grand_total || 0;
       document.getElementById('edit-discount').value = 0;
-      document.getElementById('edit-payment-ref').value = invoice.receipt_no || '';
+      document.getElementById('edit-receipt_no').value = invoice.receipt_no || '';
+      document.getElementById('edit-payment-ref').value = invoice.paymentRef || '';
 
-      // Populate product table
+      // Add products
       const tableBody = document.getElementById('edit-invoice-products');
       tableBody.innerHTML = '';
 
       (invoice.items || []).forEach(item => {
         const row = document.createElement('tr');
+        const total = (item.qty * item.rate).toFixed(2);
         row.innerHTML = `
           <td>
             <div class="d-flex align-items-center">
@@ -947,13 +989,17 @@
           <td>0</td>
           <td>0.00</td>
           <td>${item.rate}</td>
-          <td>${item.total}</td>
+          <td>${total}</td>
         `;
         tableBody.appendChild(row);
       });
+
+      // Delay to ensure elements are in DOM before calculating
+      setTimeout(recalculateTotals, 100);
     });
   });
 </script>
+
 
 	<!-- jQuery -->
 	<script data-cfasync="false" src="../../cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="assets/js/jquery-3.7.1.min.js" type="b3eeb33e1d86f4025010ad76-text/javascript"></script>

@@ -44,7 +44,7 @@ const invoiceSchema = new mongoose.Schema({
     enum: ['cash', 'credit'],
     required: true
   },
-  items: [invoiceItemSchema], // <-- this stores the multiple product lines
+  items: [invoiceItemSchema],
   paid_amount: {
     type: Number,
     required: true
@@ -69,6 +69,9 @@ const invoiceSchema = new mongoose.Schema({
   receipt_no: {
     type: String,
     required: true
+  },
+  paymentRef: {
+    type: String
   },
   branch: {
     type: mongoose.Schema.Types.ObjectId,

@@ -216,7 +216,13 @@ document.addEventListener("DOMContentLoaded", () => {
             <td class="p-3"><%= entry.customer.customer_name %></td>
             <td class="p-3"><%= new Date(entry.date).toLocaleDateString() %></td>
             <td class="p-3"><%= entry.type %></td>
-            <td class="p-3"><%= entry.refNo %></td>
+            <td class="p-3">
+              <%= entry.refNo %>
+              <% if (entry.status && entry.status !== 'normal') { %>
+                (<%= entry.status %>)
+              <% } %>
+            </td>
+
             <td class="p-3">
               <% if (entry.type === 'credit-sales') { %>
                 <span style="color: red;">-₦<%= amt.toLocaleString() %></span>

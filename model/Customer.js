@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const customerSchema = new mongoose.Schema({
   customer_name: { type: String, required: true },
   mobile: { type: String },
-  email: { type: String },
   address: { type: String },
 
   branch: {
@@ -23,6 +22,8 @@ const customerSchema = new mongoose.Schema({
 
   cash_sales_count: { type: Number, default: 0 },
   credit_sales_count: { type: Number, default: 0 },
+  order_count: { type: Number, default: 0 },
+  sales_amount: { type: Number, default: 0 },
 
   createdAt: {
     type: Date,
