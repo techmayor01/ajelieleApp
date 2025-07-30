@@ -1,0 +1,42 @@
+<!-- DataTables + Extensions -->
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+$('#stockTable').DataTable({
+  responsive: true,
+  scrollX: true,
+  dom: 'Bfrtip',
+  buttons: [
+    'copy', 'excel', 'csv', 
+    {
+      extend: 'pdfHtml5',
+      orientation: 'landscape',
+      pageSize: 'A4',
+      exportOptions: {
+        columns: ':visible'
+      },
+      customize: function(doc) {
+           // Left align all table headers and cells
+      doc.styles.tableHeader.alignment = 'left';
+      doc.styles.tableBodyEven.alignment = 'left';
+      doc.styles.tableBodyOdd.alignment = 'left';
+
+      // Optional: define column widths to avoid PDF compressing columns
+      doc.content[1].table.widths = ['*', '*', '*', '*', '*'];
+      }
+    },
+    'print'
+  ],
+  language: {
+    searchPlaceholder: 'Search stock...',
+    search: '',
+  },
+});
+
+</script>

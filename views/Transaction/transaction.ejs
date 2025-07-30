@@ -192,11 +192,19 @@
 															<i data-feather="edit" class="feather-edit"></i>
 														</a>
 
-														<a data-bs-toggle="modal" data-bs-target="#delete-modal" class="me-2 p-2 mb-0" href="javascript:void(0);">
+														<a
+															data-id="<%= tx._id %>"
+															data-bs-toggle="modal"
+															data-bs-target="#delete-modal"
+															onclick="document.getElementById('delete-transaction-id').value = '<%= tx._id %>'"
+															class="me-2 p-2 mb-0"
+															href="javascript:void(0);"
+															>
 															<i data-feather="trash-2" class="feather-trash-2"></i>
 														</a>
+
 														<!-- print -->
-														<a class="me-0 p-2 mb-0" href="javascript:void(0);">
+														<a class="me-0 p-2 mb-0" href="/cash-receipt/<%= tx._id %>">
 															<i data-feather="printer" class="feather-printer"></i>
 														</a>
 														
@@ -415,7 +423,8 @@
 									<div class="col-lg-12">  
 										<div class="mb-3">                                    
 											<label class="form-label">Amount Paid<span class="text-danger ms-1">*</span></label>
-											<input type="text" id="edit-amount-paid" autocomplete="off" name="newPaidAmount" class="form-control" value="">    
+											<input type="number" id="edit-amount-paid" autocomplete="off" name="newPaidAmount" class="form-control" value="">    
+											<input type="number" id="amount-paid" autocomplete="off" hidden name="PaidAmount" class="form-control" value="">    
 										</div>                                 
 									</div>
 										<div class="col-lg-12">
@@ -444,6 +453,7 @@ button.addEventListener('click', function () {
 	document.getElementById('edit-transaction-type').value = this.dataset.type;
 	document.getElementById('edit-client-name').value = this.dataset.name;
 	document.getElementById('edit-amount-paid').value = this.dataset.amount;
+	document.getElementById('amount-paid').value = this.dataset.amount;
 	document.getElementById('edit-payment-date').value = new Date(this.dataset.date).toISOString().split('T')[0];
 });
 });
@@ -497,23 +507,26 @@ button.addEventListener('click', function () {
 	<!-- /Add ac type-->
 
 	<!-- delete modal -->
+	 <form action="/deletePayment" method="post">
+		<input type="hidden" name="transactionId" id="delete-transaction-id">
 		<div class="modal fade" id="delete-modal">
-		<div class="modal-dialog modal-dialog-centered">
-			<div class="modal-content">
-				<div class="page-wrapper-new p-0">
-					<div class="content p-5 px-3 text-center">
-							<span class="rounded-circle d-inline-flex p-2 bg-danger-transparent mb-2"><i class="ti ti-trash fs-24 text-danger"></i></span>
-							<h4 class="fs-20 fw-bold mb-2 mt-1">Delete Account</h4>
-							<p class="mb-0 fs-16">Are you sure you want to delete account?</p>
-							<div class="modal-footer-btn mt-3 d-flex justify-content-center">
-								<button type="button" class="btn me-2 btn-secondary fs-13 fw-medium p-2 px-3 shadow-none" data-bs-dismiss="modal">Cancel</button>
-								<button type="submit" class="btn btn-primary fs-13 fw-medium p-2 px-3">Yes Delete</button>
-							</div>						
+			<div class="modal-dialog modal-dialog-centered">
+				<div class="modal-content">
+					<div class="page-wrapper-new p-0">
+						<div class="content p-5 px-3 text-center">
+								<span class="rounded-circle d-inline-flex p-2 bg-danger-transparent mb-2"><i class="ti ti-trash fs-24 text-danger"></i></span>
+								<h4 class="fs-20 fw-bold mb-2 mt-1">Delete Payment</h4>
+								<p class="mb-0 fs-16">Are you sure you want to delete Payment?</p>
+								<div class="modal-footer-btn mt-3 d-flex justify-content-center">
+									<button type="button" class="btn me-2 btn-secondary fs-13 fw-medium p-2 px-3 shadow-none" data-bs-dismiss="modal">Cancel</button>
+									<button type="submit" class="btn btn-primary fs-13 fw-medium p-2 px-3">Yes Delete</button>
+								</div>						
+						</div>
 					</div>
 				</div>
 			</div>
 		</div>
-	</div>
+	 </form>
 
 	<!-- jQuery -->
 	<script src="assets/js/jquery-3.7.1.min.js" type="b62265699496398ca39223e5-text/javascript"></script>

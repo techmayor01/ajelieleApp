@@ -21,25 +21,8 @@ const parkingStockSchema = new Schema({
   unitCode: { type: String, required: true },
   quantity: { type: Number, required: true },
 
-  // Core for conversions
-  totalInBaseUnit: { type: Number, default: 0 },
-
-  // Optional snapshot for variant details
-  variantSnapshot: {
-    unitCode: String,
-    sellPrice: Number,
-    totalInBaseUnit: Number,
-    lowStockAlert: Number,
-  },
-
   parkedBy: { type: Types.ObjectId, ref: "User" },
   parkedAt: { type: Date, default: Date.now }
 });
-
-// Index adjusted to allow multiple variants per product
-parkingStockSchema.index(
-  { parkingStore: 1, product: 1, unitCode: 1 },
-  { unique: true }
-);
 
 module.exports = mongoose.model("ParkingStock", parkingStockSchema);

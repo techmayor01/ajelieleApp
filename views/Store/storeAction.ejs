@@ -178,38 +178,35 @@
                                     <tr>
                                     <th>Product</th>
                                     <th>Unit Code</th>
-                                    <th>Supplier Price(₦)</th>
-                                    <th>Sell Price(₦)</th>
                                     <th>InStock</th>
                                     <th>QTY</th>
                                     <th>Delete</th>
                                     </tr>
                                 </thead>
                                 <tbody id="variantTableBody">
-                                    <tr>
+                                <tr class="variantRow">
                                     <td class="p-2">
-                                        <input type="text" autocomplete="off" id="searchProduct" placeholder="Search Product"
+                                    <input type="text" autocomplete="off" placeholder="Search Product"
                                         class="searchProduct w-100 border rounded px-2 py-1" />
-                                        <div id="searchResults"
-                                        class="mt-2 bg-white border border-gray-300 rounded-md shadow-md max-h-60 overflow-y-auto hidden absolute w-100">
-                                        </div>
-                                        <input type="hidden" name="product[]" class="productInput" />
-                                        <input type="hidden" name="productId[]" class="productIdInput" />
+                                    <div class="searchResults mt-2 bg-white border border-gray-300 rounded-md shadow-md max-h-60 overflow-y-auto hidden absolute w-100"></div>
+                                    <input type="hidden" name="product[]" class="productInput" />
+                                    <input type="hidden" name="productId[]" class="productIdInput" />
                                     </td>
-                                    <td class="p-2"><select name="unitCode[]" id="unitCode" class="unitCode select form-control"></select></td>
-                                    <td class="p-2"><input type="number" id="supplierPrice" readonly name="supplierPrice[]" placeholder="Supplier Price"
-                                        class="form-control" /></td>
-                                    <td class="p-2"><input type="number" id="sellPrice" readonly name="sellPrice[]" placeholder="Sell Price"
-                                        class="form-control" /></td>
-                                    <td class="p-2"><input type="number" id="inStock" disabled name="inStock[]" placeholder="In Stock"
-                                        class="form-control" /></td>
-                                    <td class="p-2"><input type="number" name="quantity[]" placeholder="Quantity" class="form-control" /></td>
                                     <td class="p-2">
-                                        <button type="button" class="deleteRowBtn btn btn-sm btn-danger">
-                                        <i class="fa fa-trash"></i>
-                                        </button>
+                                    <select name="unitCode[]" class="unitCode form-control"></select>
                                     </td>
-                                    </tr>
+                                    <td class="p-2">
+                                        <input type="number" disabled name="inStock[]" placeholder="In Stock" class="form-control inStock" />
+                                    </td>
+                                    <td class="p-2">
+                                    <input type="number" name="quantity[]" placeholder="Quantity" class="qtyInput form-control" />
+                                    </td>
+                                    <td class="p-2">
+                                    <button type="button" class="deleteRowBtn btn btn-sm btn-danger">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                    </td>
+                                </tr>
                                 </tbody>
                                 </table>
                             </div>
@@ -240,166 +237,183 @@
                             });
                         });
                         </script>
-
                         <script>
                         let selectedProductGlobal = null;
 
                         function initializeSearch(row) {
                             const searchInput = row.querySelector('.searchProduct');
-                            const searchResults = row.querySelector('#searchResults');
+                            const searchResults = row.querySelector('.searchResults');
                             const branchSelector = document.getElementById('branchSelector');
                             const unitCodeSelect = row.querySelector('.unitCode');
-                            const supplierPriceInput = row.querySelector('.supplierPrice');
-                            const sellPriceInput = row.querySelector('.sellPrice');
                             const inStockInput = row.querySelector('.inStock');
 
-                            searchInput.addEventListener('input', function () {
-                            const query = this.value.trim();
-                            const branchId = branchSelector ? branchSelector.value : null;
-
-                            if (query.length < 1 || !branchId) {
-                                searchResults.classList.add('hidden');
-                                return;
+                            // Generate a unique ID for the searchResults div if not present
+                            if (!searchResults.id) {
+                                searchResults.id = `searchResults_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
                             }
 
-                            const searchUrl =
-                                currentMode === 'move'
-                                ? `/searchParkingStock?query=${encodeURIComponent(query)}&branchId=${branchId}`
-                                : `/searchProduct?query=${encodeURIComponent(query)}&branchId=${branchId}`;
+                            searchInput.addEventListener('input', function () {
+                                const query = this.value.trim();
+                                const branchId = branchSelector ? branchSelector.value : null;
 
-                            fetch(searchUrl)
-                                .then(res => res.json())
-                                .then(data => {
-                                const products = data.products;
-
-                                if (!products || products.length === 0) {
+                                if (query.length < 1 || !branchId) {
                                     searchResults.classList.add('hidden');
-                                    searchResults.innerHTML = '';
+                                    searchResults.style.display = 'none';
                                     return;
                                 }
 
-                                searchResults.innerHTML = '';
+                                const searchUrl =
+                                    currentMode === 'move'
+                                        ? `/searchParkingStock?query=${encodeURIComponent(query)}&branchId=${branchId}`
+                                        : `/searchProduct?query=${encodeURIComponent(query)}&branchId=${branchId}`;
 
-                                products.forEach(product => {
-                                    const displayName = currentMode === 'move'
-                                        ? `${product.product?.product || 'Unnamed Product'} - ${product.unitCode || ''}`
-                                        : `${product.product} - ${product.product_detail || ''}`;
+                                fetch(searchUrl)
+                                    .then(res => res.json())
+                                    .then(data => {
+                                        const products = data.products;
 
-
-                                    const item = document.createElement('div');
-                                    item.textContent = displayName;
-                                    item.className = "p-2 hover:bg-green-100 cursor-pointer";
-
-                                    item.addEventListener('click', () => {
-                                    selectedProductGlobal = product;
-
-                                    const name = currentMode === 'move'
-                                        ? product.product?.product
-                                        : product.product;
-
-                                    const productId = currentMode === 'move'
-                                        ? product.product?._id
-                                        : product._id;
-
-                                    searchInput.value = name || '';
-                                    searchResults.classList.add('hidden');
-
-                                    const productInput = row.querySelector('.productInput');
-                                    const productIdInput = row.querySelector('.productIdInput');
-
-                                    if (productInput && productIdInput) {
-                                        productInput.value = name || '';
-                                        productIdInput.value = productId || '';
-                                    }
-
-                                    unitCodeSelect.innerHTML = '';
-                                    const unitOption = document.createElement('option');
-
-                                    if (currentMode === 'move') {
-                                        unitOption.value = product.unitCode;
-                                        unitOption.textContent = `${product.unitCode} - In stock: ${product.quantity}`;
-                                        unitCodeSelect.appendChild(unitOption);
-
-                                        supplierPriceInput.value = '';
-                                        sellPriceInput.value = '';
-                                        inStockInput.value = product.quantity;
-                                    } else {
-                                        if (product.variants && product.variants.length > 0) {
-                                        const firstVariant = product.variants[0];
-                                        unitOption.value = firstVariant.unitCode;
-                                        unitOption.textContent = `${firstVariant.unitCode} - In stock: ${firstVariant.quantity}`;
-                                        unitCodeSelect.appendChild(unitOption);
-
-                                        supplierPriceInput.value = product.supplierPrice;
-                                        sellPriceInput.value = firstVariant.sellPrice;
-                                        inStockInput.value = firstVariant.quantity;
-                                        row.dataset.variantId = firstVariant._id;
-                                        } else {
-                                        supplierPriceInput.value = '';
-                                        sellPriceInput.value = '';
-                                        inStockInput.value = '';
+                                        if (!products || products.length === 0) {
+                                            searchResults.classList.add('hidden');
+                                            searchResults.style.display = 'none';
+                                            searchResults.innerHTML = '';
+                                            return;
                                         }
-                                    }
+
+                                        searchResults.innerHTML = '';
+                                        products.forEach(product => {
+                                            const displayName = currentMode === 'move'
+                                                ? `${product.product?.product || 'Unnamed Product'} - ${product.unitCode || ''}`
+                                                : `${product.product} - ${product.product_detail || ''}`;
+
+                                            const item = document.createElement('div');
+                                            item.textContent = displayName;
+                                            item.className = "p-2 hover:bg-green-100 cursor-pointer";
+
+                                            item.addEventListener('click', () => {
+                                                selectedProductGlobal = product;
+
+                                                const name = currentMode === 'move'
+                                                    ? product.product?.product
+                                                    : product.product;
+
+                                                const productId = currentMode === 'move'
+                                                    ? product.product?._id
+                                                    : product._id;
+
+                                                searchInput.value = name || '';
+
+                                                // Hide dropdown
+                                                searchResults.classList.add('hidden');
+                                                searchResults.style.display = 'none';
+
+                                                const productInput = row.querySelector('.productInput');
+                                                const productIdInput = row.querySelector('.productIdInput');
+
+                                                if (productInput && productIdInput) {
+                                                    productInput.value = name || '';
+                                                    productIdInput.value = productId || '';
+                                                }
+
+                                                unitCodeSelect.innerHTML = ''; // Clear existing options
+                                                const unitOption = document.createElement('option');
+
+                                                if (currentMode === 'move') {
+                                                    unitOption.value = product.unitCode;
+                                                    unitOption.textContent = `${product.unitCode} - In stock: ${product.quantity}`;
+                                                    unitCodeSelect.appendChild(unitOption);
+                                                    inStockInput.value = product.quantity;
+                                                } else {
+                                                    if (product.variants && product.variants.length > 0) {
+                                                        const firstVariant = product.variants[0];
+                                                        unitOption.value = firstVariant.unitCode;
+                                                        unitOption.textContent = `${firstVariant.unitCode} - In stock: ${firstVariant.quantity}`;
+                                                        unitCodeSelect.appendChild(unitOption);
+                                                        inStockInput.value = firstVariant.quantity;
+                                                        row.dataset.variantId = firstVariant._id;
+                                                    } else {
+                                                        inStockInput.value = '';
+                                                    }
+                                                }
+                                            });
+
+                                            searchResults.appendChild(item);
+                                        });
+
+                                        // Show dropdown
+                                        searchResults.classList.remove('hidden');
+                                        searchResults.style.display = 'block';
+                                    })
+                                    .catch(err => {
+                                        console.error('Search failed', err);
+                                        searchResults.classList.add('hidden');
+                                        searchResults.style.display = 'none';
                                     });
-
-                                    searchResults.appendChild(item);
-                                });
-
-                                searchResults.classList.remove('hidden');
-                                })
-                                .catch(err => {
-                                console.error('Search failed', err);
-                                });
                             });
                         }
 
                         function attachDeleteEvent(row) {
                             const deleteBtn = row.querySelector('.deleteRowBtn');
                             deleteBtn?.addEventListener('click', () => {
-                            const tbody = document.getElementById('variantTableBody');
-                            if (tbody.rows.length > 1) {
-                                row.remove();
-                            } else {
-                                alert('At least one row must remain.');
-                            }
+                                const tbody = document.getElementById('variantTableBody');
+                                if (tbody.querySelectorAll('.variantRow').length > 1) {
+                                    row.remove();
+                                } else {
+                                    alert('At least one row must remain.');
+                                }
                             });
                         }
 
-                        function attachQtyEvent(row) {
-                            const qtyInput = row.querySelector('.qtyInput');
-                            qtyInput?.addEventListener('input', () => {
+                        function attachAutoAddHandler(row) {
+                            const inputs = row.querySelectorAll('input:not([disabled]), select');
                             const tbody = document.getElementById('variantTableBody');
-                            const isLastRow = row === tbody.lastElementChild;
 
-                            if (qtyInput.value && isLastRow) {
-                                const newRow = row.cloneNode(true);
+                            inputs.forEach(input => {
+                                input.addEventListener('input', () => {
+                                    const allRows = tbody.querySelectorAll('.variantRow');
+                                    const lastRow = allRows[allRows.length - 1];
 
-                                newRow.querySelector('.searchProduct').value = '';
-                                newRow.querySelector('.productInput').value = '';
-                                newRow.querySelector('.productIdInput').value = '';
-                                newRow.querySelector('.unitCode').innerHTML = '';
-                                newRow.querySelector('.supplierPrice').value = '';
-                                newRow.querySelector('.sellPrice').value = '';
-                                newRow.querySelector('.inStock').value = '';
-                                newRow.querySelector('.qtyInput').value = '';
-                                newRow.querySelector('#searchResults').innerHTML = '';
-                                newRow.querySelector('#searchResults').classList.add('hidden');
-                                delete newRow.dataset.variantId;
+                                    if (row === lastRow) {
+                                        const newRow = row.cloneNode(true);
 
-                                tbody.appendChild(newRow);
+                                        // Clear all input values
+                                        newRow.querySelectorAll('input:not([disabled])').forEach(input => {
+                                            input.value = '';
+                                        });
 
-                                initializeSearch(newRow);
-                                attachDeleteEvent(newRow);
-                                attachQtyEvent(newRow);
-                            }
+                                        // Clear select elements properly
+                                        newRow.querySelectorAll('select').forEach(select => {
+                                            select.innerHTML = ''; // Ensure select is empty
+                                        });
+
+                                        // Hide and clear search dropdown
+                                        newRow.querySelectorAll('.searchResults').forEach(div => {
+                                            div.classList.add('hidden');
+                                            div.style.display = 'none';
+                                            div.innerHTML = '';
+                                        });
+
+                                        // Clear dataset
+                                        delete newRow.dataset.variantId;
+
+                                        tbody.appendChild(newRow);
+
+                                        // Reinitialize all events for the new row
+                                        initializeSearch(newRow);
+                                        attachDeleteEvent(newRow);
+                                        attachAutoAddHandler(newRow);
+                                    }
+                                });
                             });
                         }
 
-                        const firstRow = document.querySelector('#variantTableBody tr');
-                        initializeSearch(firstRow);
-                        attachDeleteEvent(firstRow);
-                        attachQtyEvent(firstRow);
+                        // Initialize on page load
+                        document.querySelectorAll('.variantRow').forEach(row => {
+                            initializeSearch(row);
+                            attachDeleteEvent(row);
+                            attachAutoAddHandler(row);
+                        });
                         </script>
+
                         </form>
                     </div>
                 </div>

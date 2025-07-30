@@ -29,6 +29,8 @@ mongoose
 
 app.use(require("./routes/auth"));
 app.use(require("./routes/main"));
+app.use(require("./routes/stockLogic"));
+app.use(require("./routes/sales"));
 
 
 app.use((err, req, res, next) => {

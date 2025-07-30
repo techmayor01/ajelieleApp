@@ -103,11 +103,48 @@
 									<div class="accordion-body border-top">
                                         <div class="row">
                                             <div class="col-sm-6 col-12">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Product Name<span class="text-danger ms-1">*</span></label>
-                                                    <input name="product" list="productOptions" placeholder="Enter product name" autocomplete="off" type="text" class="form-control">
-                                                    <datalist id="productOptions"></datalist>
-                                                </div>
+											<div class="mb-3 position-relative">
+											<label class="form-label">Product Name<span class="text-danger ms-1">*</span></label>
+											<input name="product" id="productInput" placeholder="Enter product name"
+												autocomplete="off" type="text" class="form-control">
+											<div id="nameStatus" class="mt-1 fw-semibold"></div>
+											</div>
+
+											<script>
+											let debounceTimer;
+
+											document.getElementById("productInput").addEventListener("input", function () {
+												clearTimeout(debounceTimer);
+												const inputVal = this.value.trim();
+												const statusDiv = document.getElementById("nameStatus");
+
+												if (!inputVal) {
+												statusDiv.textContent = "";
+												return;
+												}
+
+												debounceTimer = setTimeout(() => {
+												fetch(`/check-product-name?name=${encodeURIComponent(inputVal)}`)
+													.then(res => res.json())
+													.then(data => {
+													if (data.exists) {
+														statusDiv.textContent = "This product name already exists.";
+														statusDiv.style.color = "red";
+													} else {
+														statusDiv.textContent = "Product name is available.";
+														statusDiv.style.color = "green";
+													}
+													})
+													.catch(err => {
+													console.error("Error checking product name:", err);
+													statusDiv.textContent = "Error checking name.";
+													statusDiv.style.color = "gray";
+													});
+												}, 300); // 300ms debounce
+											});
+											</script>
+
+
                                             </div>
                                             <div class="col-sm-6 col-12">
                                                 <div class="mb-3">

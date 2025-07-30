@@ -603,3 +603,254 @@ router.get("/transactions", async (req, res) => {
     res.redirect("/error-404");
   }
 });
+
+
+
+
+
+
+
+
+dashboard
+router.get("/dashboard", async (req, res) => {
+  if (!req.user) return res.redirect("/");
+
+  try {
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/");
+
+    const branchId = user.branch?._id;
+    const selectedBranchId = req.query.branchId || branchId;
+    const sortFilter = req.query.sort;
+
+    let dateFilter = {};
+    if (sortFilter === 'today') {
+      const start = new Date(); start.setHours(0, 0, 0, 0);
+      const end = new Date(); end.setHours(23, 59, 59, 999);
+      dateFilter = { createdAt: { $gte: start, $lte: end } };
+    } else if (sortFilter === 'last7days') {
+      const lastWeek = new Date(); lastWeek.setDate(lastWeek.getDate() - 7);
+      dateFilter = { createdAt: { $gte: lastWeek } };
+    } else if (sortFilter === 'lastmonth') {
+      const lastMonth = new Date(); lastMonth.setMonth(lastMonth.getMonth() - 1);
+      dateFilter = { createdAt: { $gte: lastMonth } };
+    }
+
+    const allBranches = await Branch.find();
+    const branchDoc = allBranches.find(b => b._id.equals(selectedBranchId));
+
+    const [
+      totalCustomers,
+      totalSuppliers,
+      totalProducts,
+      topCustomers,
+      topCategories,
+      recentSales,
+      recentPurchases,
+      recentExpenses,
+      totalSalesAmount,
+      totalCashSales,
+      totalCreditSales,
+      totalExpensesAmount,
+      totalStockValue,
+      pendingInvoices,
+      totalOrders,
+      lowStockProducts,
+      totalDebtRepayments,
+      totalLoan,
+      profitData,
+      topSellingProductsRaw
+    ] = await Promise.all([
+      Customer.countDocuments({ branch: selectedBranchId }),
+      Supplier.countDocuments(),
+      Product.countDocuments({ branch: selectedBranchId }),
+
+      Customer.find({ branch: selectedBranchId }).limit(5),
+      Category.find({ branch: selectedBranchId }).limit(5),
+
+      Invoice.find({ branch: selectedBranchId, ...dateFilter }).sort({ createdAt: -1 }).limit(5),
+      SupplierInvoice.find({ branch: selectedBranchId, ...dateFilter }).sort({ createdAt: -1 }).limit(5),
+      Expense.find({ branch: selectedBranchId, ...dateFilter }).sort({ createdAt: -1 }).limit(5),
+
+      Invoice.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), ...dateFilter } },
+        { $group: { _id: null, total: { $sum: "$grand_total" } } }
+      ]),
+
+      Invoice.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), sales_type: "cash", ...dateFilter } },
+        { $group: { _id: null, total: { $sum: "$grand_total" } } }
+      ]),
+
+      Invoice.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), sales_type: "credit", ...dateFilter } },
+        { $group: { _id: null, total: { $sum: "$grand_total" } } }
+      ]),
+
+      Expense.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), ...dateFilter } },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ]),
+
+      Product.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId) } },
+        { $group: { _id: null, total: { $sum: "$totalInBaseUnit" } } }
+      ]),
+
+      SupplierInvoice.find({ branch: selectedBranchId, status: "Pending" }).limit(5),
+
+      Invoice.countDocuments({ branch: selectedBranchId, ...dateFilter }),
+
+      Product.aggregate([
+        {
+          $match: {
+            branch: new mongoose.Types.ObjectId(selectedBranchId),
+            ...(Object.keys(dateFilter).length > 0 ? dateFilter : {})
+          }
+        },
+        { $unwind: "$variants" },
+        {
+          $match: { $expr: { $lt: ["$variants.quantity", "$variants.lowStockAlert"] } }
+        },
+        {
+          $project: {
+            product: 1,
+            "variants.unitCode": 1,
+            "variants.quantity": 1,
+            "variants.lowStockAlert": 1
+          }
+        }
+      ]),
+
+      Transaction.aggregate([
+        {
+          $match: {
+            branch: new mongoose.Types.ObjectId(selectedBranchId),
+            transactionType: "Customer",
+            ...dateFilter
+          }
+        },
+        { $group: { _id: null, total: { $sum: "$amountReceived" } } }
+      ]),
+
+      Loan.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId) } },
+        { $unwind: "$loans" },
+        { $group: { _id: null, total: { $sum: "$loans.loanAmount" } } }
+      ]),
+
+      Invoice.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), ...dateFilter } },
+        { $unwind: "$items" },
+        {
+          $lookup: {
+            from: "products",
+            localField: "items.product",
+            foreignField: "_id",
+            as: "productInfo"
+          }
+        },
+        { $unwind: "$productInfo" },
+        {
+          $project: {
+            quantity: "$items.qty",
+            sellPrice: "$items.rate",
+            supplierPrice: "$productInfo.supplierPrice",
+            profitPerItem: { $subtract: ["$items.rate", "$productInfo.supplierPrice"] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalProfit: { $sum: { $multiply: ["$profitPerItem", "$quantity"] } }
+          }
+        }
+      ]),
+
+      Invoice.aggregate([
+        { $match: { branch: new mongoose.Types.ObjectId(selectedBranchId), ...dateFilter } },
+        { $unwind: "$items" },
+        {
+          $group: {
+            _id: {
+              productId: "$items.product",
+              unitCode: "$items.unitcode"
+            },
+            totalSold: { $sum: "$items.qty" },
+            totalRevenue: { $sum: "$items.total" }
+          }
+        },
+        {
+          $lookup: {
+            from: "products",
+            localField: "_id.productId",
+            foreignField: "_id",
+            as: "product"
+          }
+        },
+        { $unwind: "$product" },
+        {
+          $project: {
+            productId: "$_id.productId",
+            productName: "$product.product",
+            unitCode: "$_id.unitCode",
+            image: "$product.product_image",
+            totalSold: 1,
+            totalAmount: "$totalRevenue"
+          }
+        },
+        { $sort: { totalSold: -1 } },
+        { $limit: 5 }
+      ])
+    ]);
+
+    const totalSales = totalSalesAmount[0]?.total || 0;
+    const totalExpenses = totalExpensesAmount[0]?.total || 0;
+    const profit = profitData[0]?.totalProfit || 0;
+
+    // 🛠 Defensive defaulting to avoid undefined in EJS
+    const topSellingProducts = topSellingProductsRaw.map(item => ({
+      ...item,
+      totalAmount: item.totalAmount || 0,
+      totalSold: item.totalSold || 0
+    }));
+
+    const dashboardData = {
+      totalCustomers,
+      totalSuppliers,
+      totalProducts,
+      topCustomers,
+      topCategories,
+      recentSales,
+      recentPurchases,
+      recentExpenses,
+      totalSalesAmount: totalSales,
+      totalCashSales: totalCashSales[0]?.total || 0,
+      totalCreditSales: totalCreditSales[0]?.total || 0,
+      totalExpensesAmount: totalExpenses,
+      totalStockValue: totalStockValue[0]?.total || 0,
+      pendingInvoices,
+      allBranches,
+      selectedBranchId,
+      totalOrders,
+      lowStockProducts,
+      totalDebtRepayments: totalDebtRepayments[0]?.total || 0,
+      totalLoan: totalLoan[0]?.total || 0,
+      profit,
+      topSellingProducts
+    };
+
+    res.render("index", {
+      user,
+      dashboardData,
+      branches: allBranches,
+      currentSort: sortFilter,
+      selectedBranchId,
+      ownerBranch: { branch: branchDoc }
+    });
+
+  } catch (err) {
+    console.error("Error loading dashboard:", err);
+    res.status(500).send("Internal Server Error");
+  }
+});

@@ -53,10 +53,11 @@ const parkingStockLedgerSchema = new Schema({
     type: String,
     required: true
   },
-  particulars: {
+  status: {
     type: String,
-    required: true
-  },
+    enum: ['normal', 'edited', 'deleted'],
+    default: 'normal'
+  }
 }, {
   timestamps: true
 });

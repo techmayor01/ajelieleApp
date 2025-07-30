@@ -58,6 +58,11 @@ const stockLedgerSchema = new Schema({
   stock_ID: {
     type: String,
     required: true
+  },
+  status: {
+    type: String,
+    enum: ['normal', 'edited', 'deleted'],
+    default: 'normal'
   }
 }, {
   timestamps: true

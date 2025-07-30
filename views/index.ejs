@@ -323,40 +323,42 @@
 							</div>
 						</div>
 					</div>
-<div class="col-xxl-8 col-xl-7 col-sm-12 col-12 d-flex">
-  <div class="card flex-fill">
-    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-3">
-      <div class="d-inline-flex align-items-center">
-        <span class="title-icon bg-soft-pink fs-16 me-2"><i class="ti ti-box"></i></span>
-        <h5 class="card-title mb-0">Top Selling Products</h5>
-      </div>
-    </div>
-    <div class="card-body sell-product">
-      <% dashboardData.topSellingProducts.forEach(function(item, index) { %>
-        <div class="d-flex align-items-center justify-content-between border-bottom">
-          <div class="d-flex align-items-center">
-            <a href="javascript:void(0);" class="avatar avatar-lg">
-              <img src="<%= item.image ? '/uploads/' + item.image : 'assets/img/no-image.jpg' %>" alt="img">
-            </a>
-            <div class="ms-2">
-              <h6 class="fw-bold mb-1">
-                <a href="javascript:void(0);"><%= item.productName %></a>
-              </h6>
-              <div class="d-flex align-items-center item-list">
-                <p>₦<%= item.totalAmount.toLocaleString() %></p>
-                <p><%= item.totalSold %>+ Sales</p>
-              </div>
-            </div>
-          </div>
-          <span class="badge bg-outline-success badge-xs d-inline-flex align-items-center">
-            <i class="ti ti-arrow-up-left me-1"></i>25%
-          </span>
-        </div>
-      <% }); %>
-    </div>
-  </div>
-</div>
-
+					<div class="col-xxl-8 col-xl-7 col-sm-12 col-12 d-flex">
+						<div class="card flex-fill">
+							<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+							<div class="d-inline-flex align-items-center">
+								<span class="title-icon bg-soft-pink fs-16 me-2"><i class="ti ti-box"></i></span>
+								<h5 class="card-title mb-0">Top Selling Products</h5>
+							</div>
+							</div>
+							<div class="card-body sell-product">
+							<% if (dashboardData.topSellingProducts.length > 0) { %>
+								<% dashboardData.topSellingProducts.forEach(function(item, index) { %>
+								<div class="d-flex align-items-center justify-content-between border-bottom">
+									<div class="d-flex align-items-center">
+									<a href="javascript:void(0);" class="avatar avatar-lg">
+										<img src="<%= item.image ? '/media/uploads/' + item.image : 'assets/img/no-image.jpg' %>" alt="img">
+									</a>
+									<div class="ms-2">
+										<h6 class="fw-bold mb-1">
+										<a href="javascript:void(0);"><%= item.productName %></a>
+										</h6>
+										<div class="d-flex align-items-center item-list">
+										<p>₦<%= item.totalAmount.toLocaleString() %></p>
+										<p><%= item.totalSold %>+ Sales</p>
+										</div>
+									</div>
+									</div>
+								</div>
+								<% }); %>
+							<% } else { %>
+								<div class="text-center text-muted py-5">
+								<p>No data available</p>
+								</div>
+							<% } %>
+							</div>
+						</div>
+					</div>
 
 				</div>
 
@@ -371,96 +373,43 @@
 								</div>
 							</div>
 							<div class="card-body">
-								<div class="d-flex align-items-center justify-content-between mb-4">
-									<div class="d-flex align-items-center">
-										<a href="javascript:void(0);" class="avatar avatar-lg">
-											<img src="assets/img/products/product-11.jpg" alt="img">
-										</a>
-										<div class="ms-2">
-											<h6 class="fw-bold mb-1"><a href="javascript:void(0);">Apple Watch Series 9</a></h6>
-											<div class="d-flex align-items-center item-list">			
-												<p>Electronics</p>
-												<p class="text-gray-9">₦640</p>
-											</div>
-										</div>
-									</div>
-									<div class="text-end">
-										<p class="fs-13 mb-1">Today</p>
-										<span class="badge bg-purple badge-xs d-inline-flex align-items-center"><i class="ti ti-circle-filled fs-5 me-1"></i>Processing</span>
-									</div>									
+							<% if (dashboardData.recentSales && dashboardData.recentSales.length > 0) { %>
+							<% dashboardData.recentSales.forEach(sale => { %>
+							<div class="d-flex align-items-center justify-content-between mb-4">
+							<div class="d-flex align-items-center">
+								<a href="javascript:void(0);" class="avatar avatar-lg">
+								<img src="<%= sale.product_image ? '/media/uploads/' + sale.product_image : '/assets/img/no-image.jpg' %>" alt="img">
+								</a>
+								<div class="ms-2">
+								<h6 class="fw-bold mb-1"><a href="javascript:void(0);"><%= sale.product_name %></a></h6>
+								<div class="d-flex align-items-center item-list">			
+									<p><%= sale.category %></p>
+									<p class="text-gray-9">₦<%= sale.total.toLocaleString() %></p>
 								</div>
-								<div class="d-flex align-items-center justify-content-between mb-4">
-									<div class="d-flex align-items-center">
-										<a href="javascript:void(0);" class="avatar avatar-lg">
-											<img src="assets/img/products/product-12.jpg" alt="img">
-										</a>
-										<div class="ms-2">
-											<h6 class="fw-bold mb-1"><a href="javascript:void(0);">Gold Bracelet</a></h6>
-											<div class="d-flex align-items-center item-list">			
-												<p>Fashion</p>
-												<p class="text-gray-9">₦126</p>
-											</div>
-										</div>
-									</div>
-									<div class="text-end">
-										<p class="fs-13 mb-1">Today</p>
-										<span class="badge badge-danger badge-xs d-inline-flex align-items-center"><i class="ti ti-circle-filled fs-5 me-1"></i>Cancelled</span>
-									</div>									
 								</div>
-								<div class="d-flex align-items-center justify-content-between mb-4">
-									<div class="d-flex align-items-center">
-										<a href="javascript:void(0);" class="avatar avatar-lg">
-											<img src="assets/img/products/product-13.jpg" alt="img">
-										</a>
-										<div class="ms-2">
-											<h6 class="fw-bold mb-1"><a href="javascript:void(0);">Parachute Down Duvet</a></h6>
-											<div class="d-flex align-items-center item-list">			
-												<p>Health</p>
-												<p class="text-gray-9">₦69</p>
-											</div>
-										</div>
-									</div>
-									<div class="text-end">
-										<p class="fs-13 mb-1">15 Jan 2025</p>
-										<span class="badge badge-cyan badge-xs d-inline-flex align-items-center"><i class="ti ti-circle-filled fs-5 me-1"></i>Onhold</span>
-									</div>									
-								</div>
-								<div class="d-flex align-items-center justify-content-between mb-4">
-									<div class="d-flex align-items-center">
-										<a href="javascript:void(0);" class="avatar avatar-lg">
-											<img src="assets/img/products/product-14.jpg" alt="img">
-										</a>
-										<div class="ms-2">
-											<h6 class="fw-bold mb-1"><a href="javascript:void(0);">YETI Rambler Tumbler</a></h6>
-											<div class="d-flex align-items-center item-list">			
-												<p>Sports</p>
-												<p class="text-gray-9">₦65</p>
-											</div>
-										</div>
-									</div>
-									<div class="text-end">
-										<p class="fs-13 mb-1">12 Jan 2025</p>
-										<span class="badge bg-purple badge-xs d-inline-flex align-items-center"><i class="ti ti-circle-filled fs-5 me-1"></i>Processing</span>
-									</div>									
-								</div>
-								<div class="d-flex align-items-center justify-content-between mb-0">
-									<div class="d-flex align-items-center">
-										<a href="javascript:void(0);" class="avatar avatar-lg">
-											<img src="assets/img/products/product-15.jpg" alt="img">
-										</a>
-										<div class="ms-2">
-											<h6 class="fw-bold mb-1"><a href="javascript:void(0);">Osmo Genius Starter Kit</a></h6>
-											<div class="d-flex align-items-center item-list">			
-												<p>Lifestyles</p>
-												<p class="text-gray-9">₦87.56</p>
-											</div>
-										</div>
-									</div>
-									<div class="text-end">
-										<p class="fs-13 mb-1">11 Jan 2025</p>
-										<span class="badge badge-success badge-xs d-inline-flex align-items-center"><i class="ti ti-circle-filled fs-5 me-1"></i>Completed</span>
-									</div>									
-								</div>
+							</div>
+							<div class="text-end">
+								<p class="fs-13 mb-1">
+								<%= new Date(sale.createdAt).toLocaleString('en-US', { 
+									timeZone: 'Africa/Lagos', 
+									year: 'numeric', 
+									month: 'short', 
+									day: 'numeric', 
+									hour: 'numeric', 
+									minute: 'numeric', 
+									hour12: true 
+								}) %>
+								</p>
+								<span class="badge bg-purple badge-xs d-inline-flex align-items-center">
+								<i class="ti ti-circle-filled fs-5 me-1"></i><%= sale.soldBy %>
+								</span>
+							</div>									
+							</div>
+							<% }) %>
+							<% } else { %>
+							<p class="text-center text-muted">No recent sales data available.</p>
+							<% } %>
+
 							</div>
 						</div>
 					</div>
@@ -481,91 +430,25 @@
 								<a href="customers.html" class="fs-13 fw-medium text-decoration-underline">View All</a>
 							</div>
 							<div class="card-body">
+								<% if (dashboardData.topCustomers && dashboardData.topCustomers.length > 0) { %>
+									<% dashboardData.topCustomers.forEach(customer => { %>
 								<div class="d-flex align-items-center justify-content-between border-bottom mb-3 pb-3 flex-wrap gap-2">
 									<div class="d-flex align-items-center">
-										<a href="javascript:void(0);" class="avatar avatar-lg flex-shrink-0">
-											<img src="assets/img/customer/customer11.jpg" alt="img">
-										</a>
 										<div class="ms-2">
-											<h6 class="fs-14 fw-bold mb-1"><a href="javascript:void(0);">Carlos Curran</a></h6>
+											<h6 class="fs-14 fw-bold mb-1"><a href="javascript:void(0);"><%= customer.customer_name %></a></h6>
 											<div class="d-flex align-items-center item-list">			
-												<p class="d-inline-flex align-items-center"><i class="ti ti-map-pin me-1"></i>USA</p>
-												<p>24 Orders</p>
+												<p><%= customer.order_count %> Orders</p>
 											</div>
 										</div>
 									</div>
 									<div class="text-end">
-										<h5>$8,9645</h5>
+										<h5>₦<%= customer.sales_amount.toLocaleString() %></h5>
 									</div>									
 								</div>
-								<div class="d-flex align-items-center justify-content-between border-bottom mb-3 pb-3 flex-wrap gap-2">
-									<div class="d-flex align-items-center">
-										<a href="javascript:void(0);" class="avatar avatar-lg flex-shrink-0">
-											<img src="assets/img/customer/customer12.jpg" alt="img">
-										</a>
-										<div class="ms-2">
-											<h6 class="fs-14 fw-bold mb-1"><a href="javascript:void(0);">Stan Gaunter</a></h6>
-											<div class="d-flex align-items-center item-list">			
-												<p class="d-inline-flex align-items-center"><i class="ti ti-map-pin me-1"></i>UAE</p>
-												<p>22 Orders</p>
-											</div>
-										</div>
-									</div>
-									<div class="text-end">
-										<h5>$16,985</h5>
-									</div>									
-								</div>
-								<div class="d-flex align-items-center justify-content-between border-bottom mb-3 pb-3 flex-wrap gap-2">
-									<div class="d-flex align-items-center">
-										<a href="javascript:void(0);" class="avatar avatar-lg flex-shrink-0">
-											<img src="assets/img/customer/customer13.jpg" alt="img">
-										</a>
-										<div class="ms-2">
-											<h6 class="fs-14 fw-bold mb-1"><a href="javascript:void(0);">Richard Wilson</a></h6>
-											<div class="d-flex align-items-center item-list">			
-												<p class="d-inline-flex align-items-center"><i class="ti ti-map-pin me-1"></i>Germany</p>
-												<p>14 Orders</p>
-											</div>
-										</div>
-									</div>
-									<div class="text-end">
-										<h5>$5,366</h5>
-									</div>									
-								</div>
-								<div class="d-flex align-items-center justify-content-between border-bottom mb-3 pb-3 flex-wrap gap-2">
-									<div class="d-flex align-items-center">
-										<a href="javascript:void(0);" class="avatar avatar-lg flex-shrink-0">
-											<img src="assets/img/customer/customer14.jpg" alt="img">
-										</a>
-										<div class="ms-2">
-											<h6 class="fs-14 fw-bold mb-1"><a href="javascript:void(0);">Mary Bronson</a></h6>
-											<div class="d-flex align-items-center item-list">			
-												<p class="d-inline-flex align-items-center"><i class="ti ti-map-pin me-1"></i>Belgium</p>
-												<p>08 Orders</p>
-											</div>
-										</div>
-									</div>
-									<div class="text-end">
-										<h5>$4,569</h5>
-									</div>									
-								</div>
-								<div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-									<div class="d-flex align-items-center">
-										<a href="javascript:void(0);" class="avatar avatar-lg flex-shrink-0">
-											<img src="assets/img/customer/customer15.jpg" alt="img">
-										</a>
-										<div class="ms-2">
-											<h6 class="fs-14 fw-bold mb-1"><a href="javascript:void(0);">Annie Tremblay</a></h6>
-											<div class="d-flex align-items-center item-list">			
-												<p class="d-inline-flex align-items-center"><i class="ti ti-map-pin me-1"></i>Greenland</p>
-												<p>14 Orders</p>
-											</div>
-										</div>
-									</div>
-									<div class="text-end">
-										<h5>$3,5698</h5>
-									</div>									
-								</div>
+									<% }) %>
+								<% } else { %>
+								<p class="text-center text-muted">No top customers data available.</p>
+								<% } %>
 							</div>
 						</div>
 					</div>	
@@ -578,22 +461,6 @@
 								<div class="d-inline-flex align-items-center">
 									<span class="title-icon bg-soft-orange fs-16 me-2"><i class="ti ti-users"></i></span>
 									<h5 class="card-title mb-0">Top Categories</h5>
-								</div>
-								<div class="dropdown">
-									<a href="javascript:void(0);" class="dropdown-toggle btn btn-sm btn-white d-flex align-items-center" data-bs-toggle="dropdown" aria-expanded="false">
-										<i class="ti ti-calendar me-1"></i>Weekly
-									</a>
-									<ul class="dropdown-menu p-3">
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item">Today</a>
-										</li>
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item">Weekly</a>
-										</li>
-										<li>
-											<a href="javascript:void(0);" class="dropdown-item">Monthly</a>
-										</li>
-									</ul>
 								</div>
 							</div>
 							<div class="card-body">
@@ -637,7 +504,7 @@
 				
 			</div>
 			<div class="copyright-footer d-flex align-items-center justify-content-between border-top bg-white gap-3 flex-wrap">
-				<p class="fs-13 text-gray-9 mb-0">2025 &copy; AJALI. All Right Reserved</p>
+				<p class="fs-13 text-gray-9 mb-0">2025 &copy; AJELIELE. All Right Reserved</p>
 				<p>Developed By <a href="javascript:void(0);" class="link-primary">Tech Mayor Groups</a></p>
 			</div>
 		</div>
