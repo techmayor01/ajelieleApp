@@ -3683,7 +3683,9 @@ router.get('/searchCustomer', async (req, res) => {
   const { q } = req.query;
   if (!q) return res.json([]);
 
-  const regex = new RegExp(`^${q}`, 'i');
+  // Match any word starting with the first character of `q`, case-insensitive
+  const firstLetter = q[0];
+  const regex = new RegExp(`\\b${firstLetter}`, 'i');
 
   try {
     const customers = await Customer.find({ customer_name: regex }).limit(10);
@@ -3698,6 +3700,7 @@ router.get('/searchCustomer', async (req, res) => {
     res.status(500).json([]);
   }
 });
+
 
 // router.post('/addinvoice', async (req, res, next) => {
 //   console.log("Received request to add invoice:", req.body);

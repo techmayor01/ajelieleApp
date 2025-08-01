@@ -166,8 +166,7 @@
         </a>
         <ul class="dropdown-menu">
           <li>
-			<a href="#" class="dropdown-item edit-sale-btn" data-bs-toggle="modal" data-bs-target="#edit-sales-new"
-				data-invoice='<%- JSON.stringify(invoice) %>'>
+			<a href="/update-invoice/<%= invoice._id %>" class="dropdown-item edit-sale-btn" >
 				<i data-feather="edit" class="info-img"></i>Edit Sale
 			</a>		  
 		</li>

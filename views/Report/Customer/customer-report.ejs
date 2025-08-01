@@ -192,10 +192,10 @@ document.addEventListener("DOMContentLoaded", () => {
         </thead>
         <tbody>
           <% 
-            let totalCreditSales = 0;
-            let totalPaidSales = 0;
-            let totalPaid = 0;
-            let lastBalance = 0;
+            let totallCreditSales = 0;
+            let totallPaidSales = 0;
+            let totallPaid = 0;
+            let lastlBalance = 0;
 
             entries.forEach(entry => {
               const amt = entry.amount || 0;
@@ -203,14 +203,14 @@ document.addEventListener("DOMContentLoaded", () => {
               const bal = entry.Balance || 0;
 
               if (entry.type === 'credit-sales') {
-                totalCreditSales += amt;
+                totallCreditSales += amt;
               } else if (entry.type === 'paid-sales') {
-                totalPaidSales += amt;
+                totallPaidSales += amt;
               } else if (entry.type === 'payment') {
-                totalPaid += paid;
+                totallPaid += paid;
               }
 
-              lastBalance = bal;
+              lastlBalance = bal;
           %>
           <tr>
             <td class="p-3"><%= entry.customer.customer_name %></td>
@@ -251,36 +251,84 @@ document.addEventListener("DOMContentLoaded", () => {
           </tr>
           <% }); %>
         </tbody>
-        <tfoot>
-          <tr>
-            <td class="bg-light fw-bold p-3 fs-16" colspan="4">Total</td>
-            <td class="bg-light fw-bold p-3 fs-16">
-              <% 
-                const combinedTotal = totalCreditSales + totalPaidSales;
-                if (combinedTotal !== 0) { %>
-                  ₦<%= Math.abs(combinedTotal).toLocaleString() %>
-              <% } else { %>
-                  ₦0
-              <% } %>
-            </td>
-            <td class="bg-light fw-bold p-3 fs-16">
-              <% if (totalPaid > 0) { %>
-                +₦<%= totalPaid.toLocaleString() %>
-              <% } else { %>
-                ₦0
-              <% } %>
-            </td>
-            <td class="bg-light fw-bold p-3 fs-16">
-              <% if (lastBalance < 0) { %>
-                -₦<%= Math.abs(lastBalance).toLocaleString() %>
-              <% } else if (lastBalance > 0) { %>
-                +₦<%= lastBalance.toLocaleString() %>
-              <% } else { %>
-                ₦0
-              <% } %>
-            </td>
-          </tr>
-        </tfoot>
+      <tfoot>
+  <tr>
+    <td class="bg-light fw-bold p-3 fs-16" colspan="4">Total</td>
+    <td class="bg-light fw-bold p-3 fs-16">
+      <% 
+        // Group entries by receipt_no (refNo)
+        const groupedEntries = {};
+        entries.forEach(entry => {
+          if (!groupedEntries[entry.refNo]) {
+            groupedEntries[entry.refNo] = [];
+          }
+          groupedEntries[entry.refNo].push(entry);
+        });
+
+        let totalCreditSales = 0;
+        let totalPaidSales = 0;
+        let totalPaid = 0;
+
+        Object.keys(groupedEntries).forEach(refNo => {
+          const group = groupedEntries[refNo];
+
+          const editedEntries = group.filter(e => e.status === 'edited');
+          let entriesToInclude = [];
+
+          if (editedEntries.length > 0) {
+            entriesToInclude = editedEntries;
+          } else {
+            entriesToInclude = group.filter(e => e.status === 'normal');
+          }
+
+          entriesToInclude.forEach(entry => {
+            const amt = entry.amount || 0;
+            const paid = entry.paid || 0;
+
+            if (entry.type === 'credit-sales') {
+              totalCreditSales += amt;
+            } else if (entry.type === 'paid-sales') {
+              totalPaidSales += amt;
+            } else if (entry.type === 'payment') {
+              totalPaid += paid;
+            }
+          });
+        });
+
+        const combinedTotal = totalCreditSales + totalPaidSales;
+
+        if (combinedTotal !== 0) { %>
+          ₦<%= Math.abs(combinedTotal).toLocaleString() %>
+      <% } else { %>
+          ₦0
+      <% } %>
+    </td>
+    <td class="bg-light fw-bold p-3 fs-16">
+      <% if (totalPaid > 0) { %>
+        +₦<%= totalPaid.toLocaleString() %>
+      <% } else { %>
+        ₦0
+      <% } %>
+    </td>
+    <td class="bg-light fw-bold p-3 fs-16">
+      <% 
+        // lastBalance logic: use last balance of the last entry in entries array (unchanged)
+        let lastBalance = 0;
+        if (entries.length > 0) {
+          lastBalance = entries[entries.length - 1].Balance || 0;
+        }
+
+        if (lastBalance < 0) { %>
+          -₦<%= Math.abs(lastBalance).toLocaleString() %>
+      <% } else if (lastBalance > 0) { %>
+          +₦<%= lastBalance.toLocaleString() %>
+      <% } else { %>
+          ₦0
+      <% } %>
+    </td>
+  </tr>
+</tfoot>
+
       </table>
     </div>
   </div>

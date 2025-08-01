@@ -36,7 +36,7 @@ const customerLedgerSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-    status: {
+  status: {
     type: String,
     enum: ['normal', 'edited', 'deleted'],
     default: 'normal'

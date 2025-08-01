@@ -11,6 +11,7 @@ const Customer = require("../model/Customer");
 const CustomerLedger = require("../model/CustomerLedger");
 const SalesLedger = require('../model/SalesLedger');
 const Invoice = require('../model/Invoice');
+const Category = require("../model/Category");
 const Transaction = require('../model/Transaction');
 const Config = require('../model/NegSales');
 const Product = require("../model/Product");
@@ -516,11 +517,323 @@ router.get('/cash-receipt/:cashId', async (req, res, next) => {
 
 // SALES INVOICE EDIT ----------------------- TECH MAYOR GROUPS 
 
+router.get("/update-invoice/:id", async (req, res, next) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
 
+  try {
+    const user = await User.findById(req.user._id).populate("branch");
+    if (!user) return res.redirect("/");
 
-router.post("/update-invoice", async (req, res) => {
-  console.log("Update Invoice Request:", req.body);
+    const branchId = user.branch._id || user.branch;
+    const invoiceId = req.params.id;
+
+    const invoice = await Invoice.findById(invoiceId);
+    if (!invoice) return res.status(404).send("Invoice not found");
+
+    const [customers, products, categories, config] = await Promise.all([
+      Customer.find({ branch: branchId }).sort({ createdAt: -1 }),
+      Product.find({ branch: branchId }).sort({ createdAt: -1 }),
+      Category.find({}),
+      Config.findOne({ key: "negativeSalesActive" })
+    ]);
+
+    const negativeSalesActive = config?.value === true;
+
+    const items = invoice.items.map(item => {
+      const productId = item.product?._id || item.product;
+      const productDoc = products.find(p => p._id.equals(productId));
+      const variant = productDoc?.variants?.find(v => v.unitCode === item.unitcode);
+
+      return {
+        product_id: productId,
+        product_name: item.product_name || productDoc?.product || 'Unknown Product',
+        unitcode: item.unitcode,
+        rate: item.rate,
+        qty: item.qty,
+        total: item.total,
+        availableQty: variant?.quantity || 0,
+        variants: productDoc?.variants || []
+      };
+    });
+
+    const viewData = {
+      user,
+      ownerBranch: { branch: user.branch },
+      branches: user.role === 'owner' ? await Branch.find() : [],
+      invoice,
+      items,
+      customers,
+      products,
+      categories,
+      negativeSalesActive
+    };
+
+    res.render("Sales/edit-sales", viewData);
+  } catch (err) {
+    console.error("Error loading update-invoice:", err);
+    next(err);
+  }
 });
+
+// router.post("/update-invoice/:id", async (req, res, next) => {
+//   console.log("Update Invoice Request:", req.body);
+// });
+
+router.post("/update-invoice/:id", async (req, res, next) => {
+  const roundToTwo = num => Math.round((num + Number.EPSILON) * 100) / 100;
+
+  try {
+    const invoiceId = req.params.id;
+    const {
+      receipt_no,
+      customerId,
+      customer_name,
+      payment_date,
+      sales_type,
+      payment_type,
+      paymentRef,
+      product,
+      qty,
+      unitcode,
+      rate,
+      total,
+      paid_amount,
+      discount = 0,
+      grand_total
+    } = req.body;
+
+    const [products, qtys, units, rates, totals] = [product, qty, unitcode, rate, total].map(arr =>
+      Array.isArray(arr) ? arr : [arr]
+    );
+
+    const filteredItems = products.map((p, i) => ({
+      product: p?.trim(),
+      qty: qtys[i],
+      unitcode: units[i],
+      rate: rates[i],
+      total: totals[i]
+    })).filter(item => item.product);
+
+    const grandTotalNum = roundToTwo(+grand_total);
+    const paidAmountNum = roundToTwo(+paid_amount);
+    const remainingAmount = roundToTwo(grandTotalNum - paidAmountNum);
+
+    const invoice = await Invoice.findById(invoiceId);
+    if (!invoice) throw { status: 404, message: "Invoice not found" };
+
+    const customer = await Customer.findById(customerId);
+    if (!customer) throw { status: 404, message: "Customer not found" };
+
+    const branchId = customer.branch;
+    const branch = await Branch.findById(branchId);
+
+
+    const lastLedger = await CustomerLedger.find({ customer: customer._id }).sort({ createdAt: -1 }).limit(1);
+    const lastBalance = lastLedger.length ? roundToTwo(lastLedger[0].Balance) : 0;
+
+    await CustomerLedger.create({
+      customer: customer._id,
+      branch: branchId,
+      type: sales_type === 'credit' ? 'credit-sales' : 'paid-sales',
+      refNo: receipt_no,
+      date: new Date(payment_date),
+      amount: grandTotalNum, // updated amount
+      paid: 0,
+      Balance: sales_type === 'credit'
+        ? roundToTwo(lastBalance - grandTotalNum)
+        : lastBalance,
+      status: 'edited'
+    });
+
+
+
+    const items = [];
+
+    // === 2. Apply updated sales and optionally stock
+    for (const { product: productName, qty: qtyStr, unitcode, rate: rateStr, total: totalStr } of filteredItems) {
+      const soldQty = roundToTwo(+qtyStr);
+      const itemRate = roundToTwo(+rateStr);
+      const itemTotal = roundToTwo(+totalStr);
+
+      const productDoc = await Product.findOne({ product: productName, branch: branchId });
+      if (!productDoc) continue;
+
+      const baseVariant = productDoc.variants[0];
+      const sellingVariant = productDoc.variants.find(v => v.unitCode === unitcode);
+      if (!sellingVariant) continue;
+
+      // Determine stock difference
+const previousItem = invoice.items?.find(i => i.product_name === productName && i.unitcode === unitcode);
+const prevQty = previousItem ? roundToTwo(+previousItem.qty) : 0;
+const stockDiff = roundToTwo(soldQty - prevQty);
+
+if (soldQty === prevQty) {
+  // === No quantity change: reverse and reapply same qty
+
+  await StockLedger.create({
+    date: new Date(payment_date),
+    product: productDoc._id,
+    branch: branchId,
+    operator: req.user._id,
+    customer: customer.customer_name,
+    stock_ID: invoice.invoice_no,
+    status: 'edited',
+    particular: 'Reverse (No Change)',
+    variants: [{
+      unitCode: unitcode,
+      stock_in: soldQty,
+      stock_out: 0,
+      balance: sellingVariant.quantity + soldQty,
+      cost_price: sellingVariant.cost_price || 0,
+      total_sales: 0
+    }]
+  });
+
+  await StockLedger.create({
+    date: new Date(payment_date),
+    product: productDoc._id,
+    branch: branchId,
+    operator: req.user._id,
+    customer: customer.customer_name,
+    stock_ID: invoice.invoice_no,
+    status: 'edited',
+    particular: 'Reapply (No Change)',
+    variants: [{
+      unitCode: unitcode,
+      stock_in: 0,
+      stock_out: soldQty,
+      balance: sellingVariant.quantity,
+      cost_price: sellingVariant.cost_price || 0,
+      total_sales: itemTotal
+    }]
+  });
+
+} else {
+  // === Quantity changed: reverse old, apply new
+
+  // First: reverse old (stock IN)
+  await StockLedger.create({
+    date: new Date(payment_date),
+    product: productDoc._id,
+    branch: branchId,
+    operator: req.user._id,
+    customer: customer.customer_name,
+    stock_ID: invoice.invoice_no,
+    status: 'edited',
+    particular: 'Reverse Old Qty',
+    variants: [{
+      unitCode: unitcode,
+      stock_in: prevQty,
+      stock_out: 0,
+      balance: sellingVariant.quantity,
+      cost_price: sellingVariant.cost_price || 0,
+      total_sales: 0
+    }]
+  });
+
+  // Adjust product stock
+  sellingVariant.quantity -= (soldQty - prevQty); // Net difference
+
+  if (sellingVariant.unitCode !== baseVariant.unitCode && sellingVariant.totalInBaseUnit) {
+    baseVariant.quantity = sellingVariant.quantity / sellingVariant.totalInBaseUnit;
+  }
+
+  productDoc.variants.forEach(v => {
+    if (v.unitCode !== baseVariant.unitCode && v.totalInBaseUnit) {
+      v.quantity = baseVariant.quantity * v.totalInBaseUnit;
+    }
+  });
+
+  productDoc.variants.forEach(v => v.quantity = roundToTwo(v.quantity));
+  await productDoc.save();
+
+  // Second: apply new qty (stock OUT)
+  await StockLedger.create({
+    date: new Date(payment_date),
+    product: productDoc._id,
+    branch: branchId,
+    operator: req.user._id,
+    customer: customer.customer_name,
+    stock_ID: invoice.invoice_no,
+    status: 'edited',
+    particular: 'Apply New Qty',
+    variants: [{
+      unitCode: unitcode,
+      stock_in: 0,
+      stock_out: soldQty,
+      balance: sellingVariant.quantity,
+      cost_price: sellingVariant.cost_price || 0,
+      total_sales: itemTotal
+    }]
+  });
+}
+
+
+
+      // Add sales ledger entry
+      await SalesLedger.create({
+        product: productDoc._id,
+        product_name: productName,
+        sale_date: new Date(payment_date),
+        unit: unitcode,
+        unit_price: itemRate,
+        quantity_sold: soldQty,
+        amount: itemTotal,
+        customer: customer._id,
+        customer_name: customer.customer_name,
+        receipt_no,
+        instock_qty: sellingVariant.quantity,
+        branch: branchId,
+        operator: req.user._id,
+        sales_type,
+        status: 'edited'
+      });
+
+      items.push({
+        product: productDoc._id,
+        product_name: productName,
+        qty: soldQty,
+        unitcode,
+        rate: itemRate,
+        total: itemTotal
+      });
+    }
+
+    // === 3. Update invoice
+    invoice.payment_date = payment_date;
+    invoice.sales_type = sales_type;
+    invoice.payment_type = payment_type;
+    invoice.paymentRef = paymentRef;
+    invoice.discount = +discount || 0;
+    invoice.items = items;
+    invoice.grand_total = grandTotalNum;
+    invoice.paid_amount = paidAmountNum;
+    invoice.remaining_amount = remainingAmount;
+    invoice.updatedAt = new Date();
+
+    await invoice.save();
+
+
+
+    // === 5. Update customer stats
+    customer.sales_amount = roundToTwo((customer.sales_amount || 0) + grandTotalNum);
+    customer.order_count = (customer.order_count || 0) + 1;
+    if (sales_type === 'cash') {
+      customer.cash_sales_count = (customer.cash_sales_count || 0) + 1;
+    } else {
+      customer.credit_sales_count = (customer.credit_sales_count || 0) + 1;
+    }
+
+    await customer.save();
+
+    res.redirect(`/receipt/${invoice._id}`);
+  } catch (err) {
+    console.error("Error updating invoice:", err);
+    next(err);
+  }
+});
+
+
 
 
 
