@@ -228,7 +228,12 @@
               <td><%= sale.customer_name || '-' %></td>
               <td><%= sale.quantity_sold %></td>
               <td>₦<%= sale.amount.toLocaleString() %></td>
-              <td><%= sale.receipt_no %></td>
+              <td>
+				<%= sale.receipt_no %>
+				<% if (sale.sales_type === 'credit' && sale.status === 'edited') { %>
+					<span class="badge bg-warning text-dark ms-1">edited</span>
+				<% } %>
+			  </td>
               <td><%= sale.instock_qty %></td>
               <td><%= sale.operator?.fullname || 'Unknown' %></td>
             </tr>

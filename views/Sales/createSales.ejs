@@ -617,7 +617,7 @@
     <tr class="text-sm product-row">
       <td style="position: relative;">
         <input class="form-control productSearch" autocomplete="off" type="text" name="product" placeholder="product">
-        <ul class="productSuggestions absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded shadow text-sm max-h-60 overflow-y-auto d-none" style="min-height: 100px;"></ul>
+		<div class="autocomplete-suggestions absolute z-10 bg-white border mt-1 w-full shadow rounded hidden"></div>
       </td>
       <td><input type="number" value="0" class="form-control" readonly></td>
       <td><input name="qty" type="number" class="form-control"></td>
@@ -633,7 +633,7 @@
     <tr class="text-sm product-row d-none" id="productRowTemplate">
       <td style="position: relative;">
         <input class="form-control productSearch" autocomplete="off" type="text" name="product" placeholder="product">
-        <ul class="productSuggestions absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded shadow text-sm max-h-60 overflow-y-auto d-none" style="min-height: 100px;"></ul>
+        <div class="autocomplete-suggestions absolute z-10 bg-white border mt-1 w-full shadow rounded hidden"></div>
       </td>
       <td><input type="number" value="0" class="form-control" readonly></td>
       <td><input name="qty" type="number" class="form-control"></td>
@@ -859,11 +859,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const salesType = salesTypeSelect?.value;
     const grandTotal = parseFloat(grandTotalInput?.value) || 0;
 
-    if (
-      salesType === "credit" &&
-      customerCreditLimit > 0 &&
-      grandTotal > customerCreditLimit
-    ) {
+    if (salesType === "credit" && customerCreditLimit > 0 && grandTotal > customerCreditLimit) {
       e.preventDefault();
       availableCreditText.textContent = customerCreditLimit.toLocaleString();
       creditModal.show();
@@ -871,41 +867,36 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   function updateTotals() {
-  let subtotal = 0;
-  tbody.querySelectorAll(".product-row:not(.d-none)").forEach(row => {
-    subtotal += parseFloat(row.querySelector("input[name='total']").value) || 0;
-  });
+    let subtotal = 0;
+    tbody.querySelectorAll(".product-row:not(.d-none)").forEach(row => {
+      subtotal += parseFloat(row.querySelector("input[name='total']").value) || 0;
+    });
 
-  const discount = parseFloat(discountInput?.value) || 0;
-  const selectedSalesType = salesTypeSelect?.value || "cash";
-  const grandTotal = subtotal - discount;
+    const discount = parseFloat(discountInput?.value) || 0;
+    const selectedSalesType = salesTypeSelect?.value || "cash";
+    const grandTotal = subtotal - discount;
 
-  salesWarningBox.textContent = "";
+    salesWarningBox.textContent = "";
 
-  if (selectedSalesType === "cash") {
-    if (customerBalanceValue > 0) {
-      salesWarningBox.textContent = `Customer has a credit of ₦${customerBalanceValue.toLocaleString()}.`;
+    if (selectedSalesType === "cash") {
+      if (customerBalanceValue > 0) {
+        salesWarningBox.textContent = `Customer has a credit of ₦${customerBalanceValue.toLocaleString()}.`;
+      }
+      paidAmountInput.value = grandTotal.toFixed(2);
+      paidAmountInput.setAttribute("readonly", true);
+    } else {
+      paidAmountInput.value = "";
+      paidAmountInput.removeAttribute("readonly");
     }
 
-    paidAmountInput.value = grandTotal.toFixed(2);
-    paidAmountInput.setAttribute("readonly", true);
-  } else if (selectedSalesType === "credit") {
-    paidAmountInput.value = "";
-    paidAmountInput.removeAttribute("readonly");
+    subtotalDisplay.textContent = `₦${subtotal.toFixed(2)}`;
+    grandTotalInput.value = grandTotal.toFixed(2);
+    creditLimitDisplay.textContent = customerCreditLimit > 0
+      ? `+₦${customerCreditLimit.toLocaleString()}`
+      : `None`;
   }
 
-  subtotalDisplay.textContent = `₦${subtotal.toFixed(2)}`;
-  grandTotalInput.value = grandTotal.toFixed(2);
-  creditLimitDisplay.textContent = customerCreditLimit > 0
-    ? `+₦${customerCreditLimit.toLocaleString()}`
-    : `None`;
-}
-
-
-  // Listen to sales type change to make dynamic adjustment
-  salesTypeSelect?.addEventListener("change", () => {
-    updateTotals();
-  });
+  salesTypeSelect?.addEventListener("change", updateTotals);
 
   input.addEventListener("input", function () {
     const query = input.value.trim();
@@ -927,18 +918,15 @@ document.addEventListener('DOMContentLoaded', function () {
           const div = document.createElement('div');
           div.className = 'list-group-item list-group-item-action';
           div.textContent = customer.name;
-
           div.addEventListener('click', () => {
             input.value = customer.name;
             customerIdField.value = customer._id;
-
             customerCreditLimit = Number(customer.credit_limit) || 0;
 
             fetch(`/getCustomerBalance?customerId=${customer._id}`)
               .then(res => res.json())
               .then(data => {
                 customerBalanceValue = Number(data.balance) || 0;
-
                 const absBalance = Math.abs(customerBalanceValue).toLocaleString();
                 if (customerBalanceValue < 0) {
                   balanceDisplay.textContent = `-₦${absBalance}`;
@@ -949,11 +937,7 @@ document.addEventListener('DOMContentLoaded', function () {
                   balanceDisplay.classList.remove('text-danger');
                   balanceDisplay.classList.add('text-primary');
                 }
-
                 updateTotals();
-              })
-              .catch(err => {
-                console.error("Ledger fetch failed:", err);
               });
 
             creditLimitDisplay.textContent = customerCreditLimit > 0
@@ -965,10 +949,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
           suggestionBox.appendChild(div);
         });
-      })
-      .catch(err => {
-        console.error("Customer search error:", err);
-        suggestionBox.innerHTML = '';
       });
   });
 
@@ -987,7 +967,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function attachProductEvents(row) {
     const productInput = row.querySelector(".productSearch");
-    const productSuggestions = row.querySelector(".productSuggestions");
+    const productSuggestions = row.querySelector(".autocomplete-suggestions");
     const unitSelect = row.querySelector("select[name='unitcode']");
     const qtyInput = row.querySelector("input[name='qty']");
     const rateInput = row.querySelector("input[name='rate']");
@@ -996,22 +976,32 @@ document.addEventListener('DOMContentLoaded', function () {
 
     productInput.addEventListener("input", async () => {
       const query = productInput.value.trim();
-      if (query.length < 1) {
-        productSuggestions.classList.add("d-none");
+      if (!query) {
+        productSuggestions.classList.add("hidden");
         return;
       }
 
       try {
-        const res = await fetch(`/search-products?q=${query}`);
+        const res = await fetch(`/search-products?q=${encodeURIComponent(query)}`);
         const products = await res.json();
         productSuggestions.innerHTML = "";
 
-        products.forEach(product => {
-          const li = document.createElement("li");
-          li.className = "p-2 hover:bg-gray-100 cursor-pointer";
-          li.textContent = `${product.product} (${product.available_qty ?? 0} available)`;
+        if (products.length === 0) {
+          const div = document.createElement("div");
+          div.className = "p-2 text-gray-500";
+          div.textContent = "No products found";
+          productSuggestions.appendChild(div);
+          productSuggestions.classList.remove("hidden");
+          return;
+        }
 
-          li.addEventListener("click", () => {
+        products.forEach(product => {
+          const div = document.createElement("div");
+          div.className = "p-2 hover:bg-gray-100 cursor-pointer";
+          div.textContent = `${product.product} (${product.available_qty ?? 0} available)`;
+
+          // ✅ Use mousedown instead of click here
+          div.addEventListener("mousedown", () => {
             productInput.value = product.product;
             selectedProduct = product;
 
@@ -1027,18 +1017,25 @@ document.addEventListener('DOMContentLoaded', function () {
               unitSelect.appendChild(option);
             });
 
-            totalInput.value = ((parseFloat(rateInput.value) || 0) * (parseFloat(qtyInput.value) || 1)).toFixed(2);
-            productSuggestions.classList.add("d-none");
+            totalInput.value = (
+              (parseFloat(rateInput.value) || 0) * 
+              (parseFloat(qtyInput.value) || 1)
+            ).toFixed(2);
+
+            productSuggestions.innerHTML = '';
+            productSuggestions.classList.add("hidden");
+
             updateTotals();
             maybeAddNewRow(row);
           });
 
-          productSuggestions.appendChild(li);
+          productSuggestions.appendChild(div);
         });
 
-        productSuggestions.classList.remove("d-none");
-      } catch (e) {
-        console.error(e);
+        productSuggestions.classList.remove("hidden");
+      } catch (err) {
+        console.error("Fetch error:", err);
+        productSuggestions.classList.add("hidden");
       }
     });
 
@@ -1060,7 +1057,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener("click", (e) => {
       if (!productInput.contains(e.target) && !productSuggestions.contains(e.target)) {
-        productSuggestions.classList.add("d-none");
+        productSuggestions.classList.add("hidden");
       }
     });
   }
@@ -1084,8 +1081,9 @@ document.addEventListener('DOMContentLoaded', function () {
       input.value = input.readOnly ? "0" : "";
     });
     newRow.querySelector("select").innerHTML = "<option value=''>Select Unit</option>";
-    newRow.querySelector(".productSuggestions").innerHTML = "";
-    newRow.querySelector(".productSuggestions").classList.add("d-none");
+    const sugg = newRow.querySelector(".autocomplete-suggestions");
+    sugg.innerHTML = "";
+    sugg.classList.add("hidden");
     bindRowEvents(newRow);
     tbody.appendChild(newRow);
   }
@@ -1106,6 +1104,8 @@ document.addEventListener('DOMContentLoaded', function () {
   updateTotals();
 });
 </script>
+
+
 
 
 

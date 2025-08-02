@@ -627,23 +627,103 @@ router.post("/update-invoice/:id", async (req, res, next) => {
     const branchId = customer.branch;
     const branch = await Branch.findById(branchId);
 
+    // === Handle removed products: return stock for items no longer in the invoice
+    const currentProductsSet = new Set(filteredItems.map(item => `${item.product}-${item.unitcode}`));
+    for (const oldItem of invoice.items || []) {
+      const key = `${oldItem.product_name}-${oldItem.unitcode}`;
+      if (!currentProductsSet.has(key)) {
+        const productDoc = await Product.findOne({ product: oldItem.product_name, branch: branchId });
+        if (!productDoc) continue;
+
+        const baseVariant = productDoc.variants[0];
+        const variant = productDoc.variants.find(v => v.unitCode === oldItem.unitcode);
+        if (!variant) continue;
+
+        const prevQty = roundToTwo(+oldItem.qty);
+
+        // Reverse stock by adding back previous qty
+        variant.quantity += prevQty;
+
+        if (variant.unitCode !== baseVariant.unitCode && variant.totalInBaseUnit) {
+          baseVariant.quantity = variant.quantity / variant.totalInBaseUnit;
+        }
+
+        productDoc.variants.forEach(v => {
+          if (v.unitCode !== baseVariant.unitCode && v.totalInBaseUnit) {
+            v.quantity = baseVariant.quantity * v.totalInBaseUnit;
+          }
+        });
+
+        productDoc.variants.forEach(v => v.quantity = roundToTwo(v.quantity));
+        await productDoc.save();
+
+        // Log stock ledger reversal
+        await StockLedger.create({
+          date: new Date(payment_date),
+          product: productDoc._id,
+          branch: branchId,
+          operator: req.user._id,
+          customer: customer.customer_name,
+          stock_ID: invoice.invoice_no,
+          status: 'edited',
+          particular: 'Product Removed - Stock Reversed',
+          variants: [{
+            unitCode: oldItem.unitcode,
+            stock_in: prevQty,
+            stock_out: 0,
+            balance: variant.quantity,
+            cost_price: variant.cost_price || 0,
+            total_sales: 0
+          }]
+        });
+      }
+    }
 
     const lastLedger = await CustomerLedger.find({ customer: customer._id }).sort({ createdAt: -1 }).limit(1);
     const lastBalance = lastLedger.length ? roundToTwo(lastLedger[0].Balance) : 0;
 
-    await CustomerLedger.create({
-      customer: customer._id,
-      branch: branchId,
-      type: sales_type === 'credit' ? 'credit-sales' : 'paid-sales',
-      refNo: receipt_no,
-      date: new Date(payment_date),
-      amount: grandTotalNum, // updated amount
-      paid: 0,
-      Balance: sales_type === 'credit'
-        ? roundToTwo(lastBalance - grandTotalNum)
-        : lastBalance,
-      status: 'edited'
-    });
+if (sales_type === 'credit') {
+  // === Reverse the old credit effect (as a payment)
+  const reverseCreditAsPayment = await CustomerLedger.create({
+    customer: customer._id,
+    branch: branchId,
+    type: "payment",
+    refNo: receipt_no,
+    date: new Date(payment_date),
+    amount: 0,
+    paid: invoice.grand_total,
+    Balance: roundToTwo(lastBalance + invoice.grand_total), // Undo prior credit effect
+    status: "normal"
+  });
+
+  // === Reverse the old credit effect (as an amount)
+  const reapplyCreditAmount = await CustomerLedger.create({
+    customer: customer._id,
+    branch: branchId,
+    type: "credit-sales",
+    refNo: receipt_no,
+    date: new Date(payment_date),
+    amount: grandTotalNum,
+    paid: 0,
+    Balance: roundToTwo(reverseCreditAsPayment.Balance - grandTotalNum), // Apply new credit
+    status: "edited"
+  });
+
+} else {
+  // === Cash sales: treat normally
+  await CustomerLedger.create({
+    customer: customer._id,
+    branch: branchId,
+    type: "paid-sales",
+    refNo: receipt_no,
+    date: new Date(payment_date),
+    amount: grandTotalNum,
+    paid: 0,
+    Balance: lastBalance,
+    status: "edited"
+  });
+}
+
 
 
 
