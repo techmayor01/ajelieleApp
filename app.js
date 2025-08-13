@@ -9,6 +9,18 @@ app.use(express.static("public"));
 
 const mongoose = require("mongoose");
 const mongodb = require("mongodb");
+const fs = require('fs');
+const logStream = fs.createWriteStream('service-error.log', { flags: 'a' });
+
+// Catch uncaught exceptions
+process.on('uncaughtException', (err) => {
+  logStream.write(`[${new Date()}] Uncaught Exception: ${err.stack || err}\n`);
+});
+
+// Catch unhandled rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logStream.write(`[${new Date()}] Unhandled Rejection: ${reason}\n`);
+});
 
 
 mongoose

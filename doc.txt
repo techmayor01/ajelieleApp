@@ -1,0 +1,4 @@
+INSTALLATION OF ROLES AND PERMISSIONS 
+    cd into project folder
+        run the following command
+            node seedPermissions.js

@@ -65,6 +65,9 @@ const SalesLedger = require('../model/SalesLedger');
 const Invoice = require('../model/Invoice');
 const Transaction = require('../model/Transaction');
 const ActionLog = require('../model/ActionLog');
+const Role = require('../model/Role');
+const Permission = require('../model/Permission');
+const checkPermission = require("../Utils/checkPermission");
 router.use(require("../routes/query"))
 
 
@@ -72,7 +75,7 @@ router.use(require("../routes/query"))
 
 
 // ROUTINGS 
-router.get("/dashboard", async (req, res) => {
+router.get("/dashboard",  checkPermission("view-dashboard"), async (req, res) => {
   if (!req.user) return res.redirect("/");
 
   try {
@@ -400,47 +403,88 @@ router.get("/customer", (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/");
 
   const selectedBranchId = req.query.branchId;
+  const sortBy = req.query.sort || "today";
+  const customerType = req.query.customerType || "all";
+
+  // DATE FILTER
+  let dateFilter = {};
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  if (sortBy === "today") {
+    dateFilter = { createdAt: { $gte: today } };
+  } else if (sortBy === "last7days") {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(today.getDate() - 7);
+    dateFilter = { createdAt: { $gte: sevenDaysAgo } };
+  } else if (sortBy === "lastMonth") {
+    const lastMonth = new Date();
+    lastMonth.setMonth(today.getMonth() - 1);
+    dateFilter = { createdAt: { $gte: lastMonth } };
+  }
+
+  // CUSTOMER TYPE FILTER (fixed)
+  let typeFilter = {};
+  if (customerType === "cash") {
+    typeFilter = {
+      $and: [
+        { $or: [ { remaining_amount: { $exists: false } }, { remaining_amount: 0 } ] },
+        { $or: [ { total_debt:       { $exists: false } }, { total_debt:       0 } ] }
+      ]
+    };
+  } else if (customerType === "credit") {
+    typeFilter = {
+      $or: [
+        { remaining_amount: { $exists: true, $ne: 0 } },
+        { total_debt:       { $exists: true, $ne: 0 } }
+      ]
+    };
+  }
 
   User.findById(req.user._id)
     .populate("branch")
     .then(user => {
       if (!user) return res.redirect("/");
 
-      if (user.role === 'owner') {
-        Branch.find()
-          .then(allBranches => {
-            const branchToFilter = selectedBranchId || user.branch._id;
+      const baseFilters = {
+        branch: selectedBranchId || user.branch._id,
+        ...dateFilter,
+        ...typeFilter
+      };
 
-            Customer.find({ branch: branchToFilter })
-              .then(customers => {
-                res.render("Customer/customer", {
-                  user,
-                  ownerBranch: { branch: user.branch },
-                  branches: allBranches,
-                  selectedBranchId: branchToFilter,
-                  customers
-                });
-              })
-              .catch(err => {
-                console.error("Error fetching customers:", err);
-                res.redirect("/error-404");
+      // DEBUG: uncomment to inspect query in console
+      // console.log('Customer query filters:', JSON.stringify(baseFilters, null, 2));
+
+      if (user.role === 'owner') {
+        Branch.find().then(allBranches => {
+          Customer.find(baseFilters)
+            .sort({ createdAt: -1, _id: -1 })
+            .then(customers => {
+              res.render("Customer/customer", {
+                user,
+                ownerBranch: { branch: user.branch },
+                branches: allBranches,
+                selectedBranchId: baseFilters.branch,
+                customers,
+                selectedSort: sortBy,
+                selectedCustomerType: customerType
               });
-          });
+            });
+        });
       } else {
-        // Staff/Admin logic - show only their own branch
-        Customer.find({ branch: user.branch._id })
+        baseFilters.branch = user.branch._id;
+        Customer.find(baseFilters)
+          .sort({ createdAt: -1, _id: -1 })
           .then(customers => {
             res.render("Customer/customer", {
               user,
               ownerBranch: { branch: user.branch },
               branches: [user.branch],
               selectedBranchId: user.branch._id,
-              customers
+              customers,
+              selectedSort: sortBy,
+              selectedCustomerType: customerType
             });
-          })
-          .catch(err => {
-            console.error("Error fetching customers:", err);
-            res.redirect("/error-404");
           });
       }
     })
@@ -449,6 +493,8 @@ router.get("/customer", (req, res) => {
       res.redirect("/error-404");
     });
 });
+
+
 
 router.post("/addCustomers", (req, res) => {
   const { customer_name, mobile, email, address, credit_limit } = req.body;
@@ -690,167 +736,134 @@ router.post("/update/supplier/:id", async (req, res, next) => {
 });
 
 
-router.get("/SuppliersInvoice", (req, res) => {
-  if (req.isAuthenticated()) {
-    User.findById(req.user._id)
-      .populate("branch")
-      .then(user => {
-        if (!user) return res.redirect("/");
+router.get(
+  "/SuppliersInvoice",
+  checkPermission("view-supplier-invoices"),
+  async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.redirect("/");
 
-        if (user.role === 'owner') {
-          Branch.findById(user.branch)
-            .then(ownerBranch => {
-              Branch.find()
-                .then(allBranches => {
-                  Supplier.find()
-                    .then(suppliers => {
-                      SupplierInvoice.find()
-                        .populate('supplier')
-                        .then(invoices => {
-                          res.render("Supplier/supplierInvoice", {
-                            user: user,
-                            ownerBranch: { branch: ownerBranch },
-                            branches: allBranches,
-                            suppliers,
-                            invoices
-                          });
-                        })
-                        .catch(err => {
-                          console.error("Error fetching invoices:", err);
-                          res.redirect("/error-404");
-                        });
-                    })
-                    .catch(err => {
-                      console.error("Error fetching suppliers:", err);
-                      res.redirect("/error-404");
-                    });
-                })
-                .catch(err => {
-                  console.error("Error fetching branches:", err);
-                  res.redirect('/error-404');
-                });
-            })
-            .catch(err => {
-              console.error("Error fetching owner branch:", err);
-              res.redirect('/error-404');
-            });
-        } else {
-          Supplier.find()
-            .then(suppliers => {
-              SupplierInvoice.find()
-                .populate('supplier') // optional
-                .then(invoices => {
-                  res.render("Supplier/supplierInvoice", {
-                    user: user,
-                    ownerBranch: { branch: user.branch },
-                    suppliers,
-                    invoices
-                  });
-                })
-                .catch(err => {
-                  console.error("Error fetching invoices:", err);
-                  res.redirect("/error-404");
-                });
-            })
-            .catch(err => {
-              console.error("Error fetching suppliers:", err);
-              res.redirect("/error-404");
-            });
-        }
-      })
-      .catch(err => {
-        console.error("Error fetching user:", err);
-        res.redirect("/error-404");
+      const user = await User.findById(req.user._id).populate("branch role");
+      if (!user) return res.redirect("/");
+
+      // Check role by user.role.name instead of user.role
+      if (user.role && user.role.name === "owner") {
+        const ownerBranch = await Branch.findById(user.branch);
+        const allBranches = await Branch.find();
+        const suppliers = await Supplier.find();
+        const invoices = await SupplierInvoice.find().populate("supplier");
+
+        return res.render("Supplier/supplierInvoice", {
+          user,
+          ownerBranch: { branch: ownerBranch },
+          branches: allBranches,
+          suppliers,
+          invoices,
+        });
+      } else {
+        const suppliers = await Supplier.find();
+        const invoices = await SupplierInvoice.find().populate("supplier");
+
+        return res.render("Supplier/supplierInvoice", {
+          user,
+          ownerBranch: { branch: user.branch },
+          suppliers,
+          invoices,
+        });
+      }
+    } catch (err) {
+      console.error("Error loading supplier invoices:", err);
+      return res.redirect("/error-404");
+    }
+  }
+);
+
+router.post(
+  '/addinvoiceSuppliers',
+  checkPermission("modify-supplier-invoice"),
+  async (req, res) => {
+    try {
+      const user = req.user; // already populated by middleware
+      if (!user || !user.branch) {
+        return res.status(400).send('User or user branch not found.');
+      }
+
+      const {
+        supplier,
+        invoice_type, // 'debit' or 'credit'
+        amount,
+        payment_date,
+        reason
+      } = req.body;
+
+      const amt = Number(amount);
+
+      // Save invoice
+      const newInvoice = new SupplierInvoice({
+        supplier,
+        branch: user.branch,
+        invoice_type,
+        amount: amt,
+        payment_date,
+        reason,
+        created_by: user._id
       });
-  } else {
-    res.redirect("/");
-  }
-});
+      const savedInvoice = await newInvoice.save();
 
-router.post('/addinvoiceSuppliers', async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect('/');
+      await Supplier.findByIdAndUpdate(
+        supplier,
+        { $push: { supplierInvoice: savedInvoice._id } }
+      );
 
-  try {
-    const user = await User.findById(req.user._id);
-    if (!user || !user.branch) {
-      return res.status(400).send('User or user branch not found.');
+      await Branch.findByIdAndUpdate(
+        user.branch,
+        { $push: { supplier_invoice: savedInvoice._id } }
+      );
+
+      // Get last ledger entry to compute running balance
+      const lastLedger = await SupplierLedger.findOne({
+        supplier,
+        branch: user.branch
+      }).sort({ createdAt: -1 });
+
+      const prevBalance = lastLedger ? lastLedger.Balance : 0;
+
+      let newBalance;
+      let ledgerAmount = 0;
+      let ledgerPaid = 0;
+
+      if (invoice_type === 'debit') {
+        // Debit: increase debt
+        newBalance = prevBalance + amt;
+        ledgerAmount = amt;
+      } else if (invoice_type === 'credit') {
+        // Credit: decrease debt
+        newBalance = prevBalance - amt;
+        ledgerPaid = amt;
+      } else {
+        return res.status(400).send('Invalid invoice type.');
+      }
+
+      const ledgerEntry = new SupplierLedger({
+        supplier,
+        branch: user.branch,
+        type: invoice_type,
+        refNo: reason,
+        date: new Date(payment_date),
+        amount: ledgerAmount,
+        paid: ledgerPaid,
+        Balance: newBalance
+      });
+
+      await ledgerEntry.save();
+
+      return res.redirect('/SuppliersInvoice');
+    } catch (err) {
+      console.error('Error processing supplier invoice:', err);
+      res.status(500).send('Internal Server Error');
     }
-
-    const {
-      supplier,
-      invoice_type, // 'debit' or 'credit'
-      amount,
-      payment_date,
-      reason
-    } = req.body;
-
-    const amt = Number(amount);
-
-    // Save invoice
-    const newInvoice = new SupplierInvoice({
-      supplier,
-      branch: user.branch,
-      invoice_type,
-      amount: amt,
-      payment_date,
-      reason,
-      created_by: user._id
-    });
-    const savedInvoice = await newInvoice.save();
-
-    await Supplier.findByIdAndUpdate(
-      supplier,
-      { $push: { supplierInvoice: savedInvoice._id } }
-    );
-
-    await Branch.findByIdAndUpdate(
-      user.branch,
-      { $push: { supplier_invoice: savedInvoice._id } }
-    );
-
-    // Get last ledger entry to compute running balance
-    const lastLedger = await SupplierLedger.findOne({
-      supplier,
-      branch: user.branch
-    }).sort({ createdAt: -1 });
-
-    const prevBalance = lastLedger ? lastLedger.Balance : 0;
-
-    let newBalance;
-    let ledgerAmount = 0;
-    let ledgerPaid = 0;
-
-    if (invoice_type === 'debit') {
-      // Debit: increase debt, so balance += amount
-      newBalance = prevBalance + amt;
-      ledgerAmount = amt;
-    } else if (invoice_type === 'credit') {
-      // Credit: decrease debt, so balance -= amount
-      newBalance = prevBalance - amt;
-      ledgerPaid = amt;
-    } else {
-      return res.status(400).send('Invalid invoice type.');
-    }
-
-    const ledgerEntry = new SupplierLedger({
-      supplier,
-      branch: user.branch,
-      type: invoice_type,
-      refNo: reason,
-      date: new Date(payment_date),
-      amount: ledgerAmount,
-      paid: ledgerPaid,
-      Balance: newBalance
-    });
-
-    await ledgerEntry.save();
-
-    return res.redirect('/SuppliersInvoice');
-  } catch (err) {
-    console.error('Error processing supplier invoice:', err);
-    res.status(500).send('Internal Server Error');
   }
-});
+);
 
 
 
@@ -1041,56 +1054,45 @@ router.post("/addLoaner", async (req, res, next) => {
 });
 
 
-router.get("/manageLoan", (req, res) => {
-  if (req.isAuthenticated()) {
-    User.findById(req.user._id)
-      .populate("branch")
-      .then(user => {
-        if (!user) return res.redirect("/");
+router.get(
+  "/manageLoan",
+  checkPermission("view-loans"),
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role"); // ensure role is available for 'owner' check
 
-        if (user.role === 'owner') {
-          Branch.findById(user.branch)
-            .then(ownerBranch => {
-              Branch.find()
-                .then(allBranches => {
-                  Loan.find()
-                    .then(loaners => {
-                      res.render("Loan/manageLoan", {
-                        user: user,
-                        ownerBranch: { branch: ownerBranch },
-                        branches: allBranches,
-                        loaners
-                      });
-                    })
-                    .catch(err => {
-                      console.error("Error fetching categories:", err);
-                      res.redirect("/error-404");
-                    });
-                })
-            })
-            .catch(err => {
-              console.error(err);
-              res.redirect('/error-404');
-            });
-        } else {
-         Loan.find()
-         .then(loaners => {
-          res.render("Loan/manageLoan", {
-            user: user,
-            ownerBranch: { branch: user.branch },
-            loaners
-          });
-        })
-        }
-      })
-      .catch(err => {
-        console.error(err);
-        res.redirect("/error-404");
+      if (!user) return res.redirect("/");
+
+      if (user.role?.name === "owner") {
+        const [ownerBranch, allBranches, loaners] = await Promise.all([
+          Branch.findById(user.branch),
+          Branch.find(),
+          Loan.find()
+        ]);
+
+        return res.render("Loan/manageLoan", {
+          user,
+          ownerBranch: { branch: ownerBranch },
+          branches: allBranches,
+          loaners
+        });
+      }
+
+      const loaners = await Loan.find();
+
+      res.render("Loan/manageLoan", {
+        user,
+        ownerBranch: { branch: user.branch },
+        loaners
       });
-  } else {
-    res.redirect("/");
+    } catch (err) {
+      console.error("Error in /manageLoan route:", err);
+      res.redirect("/error-404");
+    }
   }
-});
+);
 
 
 router.get('/searchLoaner', async (req, res) => {
@@ -1189,97 +1191,130 @@ router.delete('/deleteLoan/:loanId', async (req, res) => {
 // LOAN ROUTE ENDS HERE 
 
 // STOCK ROUTE
-router.get("/addProduct", (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
+router.get(
+  "/addProduct",
+  checkPermission("add-stock"),
+  (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/");
 
-  User.findById(req.user._id)
-    .populate("branch")
-    .then(user => {
-      if (!user) return res.redirect("/");
+    User.findById(req.user._id)
+      .populate("branch")
+      .populate("role") // Ensure role is populated so we can access role.name
+      .then(user => {
+        if (!user) return res.redirect("/");
 
-      if (user.role === 'owner') {
-        Branch.findById(user.branch)
-          .then(ownerBranch => {
-            Branch.find()
-              .then(allBranches => {
-                Supplier.find()
-                  .then(suppliers => {
-                    Category.find()
-                      .then(categories => {
-                        Unit.find()
-                          .then(units => {
-                            res.render("Product/addProduct", {
-                              user,
-                              ownerBranch: { branch: ownerBranch },
-                              branches: allBranches,
-                              suppliers,
-                              categories,
-                              units
+        if (user.role.name === 'owner') {
+          Branch.findById(user.branch)
+            .then(ownerBranch => {
+              Branch.find()
+                .then(allBranches => {
+                  Supplier.find()
+                    .then(suppliers => {
+                      Category.find()
+                        .then(categories => {
+                          Unit.find()
+                            .then(units => {
+                              res.render("Product/addProduct", {
+                                user,
+                                ownerBranch: { branch: ownerBranch },
+                                branches: allBranches, // ✅ Always pass branches
+                                suppliers,
+                                categories,
+                                units
+                              });
                             });
-                          });
-                      });
-                  })
-                  .catch(err => {
-                    console.error("Error fetching suppliers or categories:", err);
-                    res.redirect("/error-404");
-                  });
-              });
-          })
-          .catch(err => {
-            console.error(err);
-            res.redirect("/error-404");
-          });
-      } else {
-        Supplier.find()
-          .then(suppliers => {
-            Category.find()
-              .then(categories => {
-                Unit.find()
-                  .then(units => {
-                    res.render("Product/addProduct", {
-                      user,
-                      ownerBranch: { branch: user.branch },
-                      suppliers,
-                      categories,
-                      units
+                        });
+                    })
+                    .catch(err => {
+                      console.error("Error fetching suppliers or categories:", err);
+                      res.redirect("/error-404");
                     });
+                });
+            })
+            .catch(err => {
+              console.error(err);
+              res.redirect("/error-404");
+            });
+        } else {
+          Supplier.find()
+            .then(suppliers => {
+              Category.find()
+                .then(categories => {
+                  Unit.find()
+                    .then(units => {
+                      res.render("Product/addProduct", {
+                        user,
+                        ownerBranch: { branch: user.branch },
+                        branches: [user.branch], // ✅ Provide single branch array
+                        suppliers,
+                        categories,
+                        units
+                      });
+                    });
+                });
+            });
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        res.redirect("/error-404");
+      });
+  }
+);
+
+
+router.get(
+  "/manageProduct",
+  checkPermission("manage-stock"),
+  (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/");
+
+    const selectedBranchId = req.query.branchId;
+
+    User.findById(req.user._id)
+      .populate("branch")
+      .then(user => {
+        if (!user) return res.redirect("/");
+
+        Unit.find().then(units => {
+          if (user.role === 'owner') {
+            Branch.find().then(allBranches => {
+              const branchToFilter = selectedBranchId || user.branch._id;
+              const selectedBranchDoc = allBranches.find(b => b._id.equals(branchToFilter));
+
+              Product.find({ branch: branchToFilter, status: "active" }) // ✅ Filter added
+                .populate('category')
+                .populate('branch')
+                .populate('variants.supplier')
+                .then(products => {
+                  res.render("Product/manageProduct", {
+                    user,
+                    ownerBranch: { branch: selectedBranchDoc },
+                    branches: allBranches,
+                    selectedBranchId: branchToFilter,
+                    products,
+                    units
                   });
-              });
-          });
-      }
-    })
-    .catch(err => {
-      console.error(err);
-      res.redirect("/error-404");
-    });
-});
-
-router.get("/manageProduct", (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
-
-  const selectedBranchId = req.query.branchId;
-
-  User.findById(req.user._id)
-    .populate("branch")
-    .then(user => {
-      if (!user) return res.redirect("/");
-
-      Unit.find().then(units => {
-        if (user.role === 'owner') {
-          Branch.find().then(allBranches => {
-            const branchToFilter = selectedBranchId || user.branch._id;
-            const selectedBranchDoc = allBranches.find(b => b._id.equals(branchToFilter));
-
-            Product.find({ branch: branchToFilter, status: "active" }) // ✅ Filter added
+                })
+                .catch(err => {
+                  console.error(err);
+                  res.redirect("/error-404");
+                });
+            }).catch(err => {
+              console.error(err);
+              res.redirect("/error-404");
+            });
+          } else {
+            Product.find({ branch: user.branch._id, status: "active" }) // ✅ Filter added
               .populate('category')
               .populate('branch')
               .populate('variants.supplier')
               .then(products => {
                 res.render("Product/manageProduct", {
                   user,
-                  ownerBranch: { branch: selectedBranchDoc },
-                  branches: allBranches,
-                  selectedBranchId: branchToFilter,
+                  ownerBranch: { branch: user.branch },
+                  branches: [user.branch],
+                  selectedBranchId: user.branch._id,
                   products,
                   units
                 });
@@ -1288,42 +1323,21 @@ router.get("/manageProduct", (req, res) => {
                 console.error(err);
                 res.redirect("/error-404");
               });
-          }).catch(err => {
-            console.error(err);
-            res.redirect("/error-404");
-          });
-        } else {
-          Product.find({ branch: user.branch._id, status: "active" }) // ✅ Filter added
-            .populate('category')
-            .populate('branch')
-            .populate('variants.supplier')
-            .then(products => {
-              res.render("Product/manageProduct", {
-                user,
-                ownerBranch: { branch: user.branch },
-                branches: [user.branch],
-                selectedBranchId: user.branch._id,
-                products,
-                units
-              });
-            })
-            .catch(err => {
-              console.error(err);
-              res.redirect("/error-404");
-            });
-        }
+          }
 
-      }).catch(err => {
+        }).catch(err => {
+          console.error(err);
+          res.redirect("/error-404");
+        });
+
+      })
+      .catch(err => {
         console.error(err);
         res.redirect("/error-404");
       });
+  }
+);
 
-    })
-    .catch(err => {
-      console.error(err);
-      res.redirect("/error-404");
-    });
-});
 
 
 router.get("/check-product-name", async (req, res) => {
@@ -1469,29 +1483,48 @@ router.get("/product-details/:id", async (req, res) => {
 });
 
 
-router.get('/edit-product/:id', async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect('/');
+router.get(
+  '/edit-product/:id',
+  checkPermission('edit-stock'),
+  async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect('/');
 
-  try {
-    const user = await User.findById(req.user._id).populate('branch');
-    const product = await Product.findById(req.params.id)
-      .populate('category branch variants.supplier');
+    try {
+      const user = await User.findById(req.user._id)
+        .populate('branch')
+        .populate('role'); // ✅ so we can check role.name
 
-    if (!product) return res.redirect('/error-404');
+      const product = await Product.findById(req.params.id)
+        .populate('category')
+        .populate('branch')
+        .populate('variants.supplier');
 
-    if (user.role !== 'owner' && !product.branch._id.equals(user.branch._id)) {
-      return res.redirect('/unauthorized');
+      if (!product) return res.redirect('/error-404');
+
+      // ✅ Only allow owner or same-branch staff
+      if (user.role.name.toLowerCase() !== 'owner' && !product.branch._id.equals(user.branch._id)) {
+        return res.redirect('/unauthorized');
+      }
+
+      const categories = await Category.find();
+      const units = await Unit.find();
+
+      res.render('Product/editProduct', {
+        user,
+        product,
+        categories,
+        units,
+        branches: user.role.name.toLowerCase() === 'owner'
+          ? await Branch.find() // owners can pick any branch in header
+          : [user.branch]        // non-owners only their branch
+      });
+    } catch (err) {
+      console.error('Edit product error:', err);
+      res.redirect('/error-404');
     }
-
-    const categories = await Category.find();       // get categories for the dropdown
-    const units = await Unit.find();                // get units for the variants dropdown
-
-    res.render('Product/editProduct', { user, product, categories, units });
-  } catch (err) {
-    console.error(err);
-    res.redirect('/error-404');
   }
-});
+);
+
 
 
 router.post('/editProduct/:id', upload.single('product_image'), async (req, res, next) => {
@@ -1552,64 +1585,73 @@ router.post('/editProduct/:id', upload.single('product_image'), async (req, res,
   }
 });
 
-router.post('/delete-product/:id', async (req, res) => {
-  try {
-    const productId = req.params.id;
+router.post(
+  '/delete-product/:id',
+  checkPermission('delete-stock'),
+  async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.redirect('/');
 
-    // 1. Find the product
-    const productDoc = await Product.findById(productId);
-    if (!productDoc) return res.status(404).send('Product not found');
+      const user = await User.findById(req.user._id)
+        .populate('branch')
+        .populate('role');
 
-    const branchId = productDoc.branch;
-    const operator = req.user?._id || null; // assuming req.user is populated
+      const productId = req.params.id;
+      const productDoc = await Product.findById(productId).populate('branch');
 
-    // 2. Soft delete the product
-    await Product.findByIdAndUpdate(productId, {
-      $set: {
-        status: 'deleted'
+      if (!productDoc) return res.status(404).send('Product not found');
+
+      // ✅ Permission check: owner or same branch
+      if (user.role.name.toLowerCase() !== 'owner' &&
+          !productDoc.branch._id.equals(user.branch._id)) {
+        return res.redirect('/unauthorized');
       }
-    });
 
-    // 3. Mark StockLedger entries as deleted (soft close)
-    await StockLedger.updateMany(
-      { product: productId, branch: branchId },
-      {
-        $set: {
-          status: 'deleted',
-          particular: 'Stock deleted - record closed',
-          date: new Date(),
-          operator: operator
+      const branchId = productDoc.branch._id;
+      const operator = req.user?._id || null;
+
+      // Soft delete product
+      await Product.findByIdAndUpdate(productId, {
+        $set: { status: 'deleted' }
+      });
+
+      // Update StockLedger
+      await StockLedger.updateMany(
+        { product: productId, branch: branchId },
+        {
+          $set: {
+            status: 'deleted',
+            particular: 'Stock deleted - record closed',
+            date: new Date(),
+            operator
+          }
         }
-        // Keep original stock_ID and other fields
-      }
-    );
+      );
 
-    // 4. Mark ParkingStockLedger entries as deleted
-    await ParkingStockLedger.updateMany(
-      { product: productId, branch: branchId },
-      {
-        $set: {
-          status: 'deleted',
-          particular: 'Stock deleted - record closed',
-          date: new Date(),
-          operator: operator
+      // Update ParkingStockLedger
+      await ParkingStockLedger.updateMany(
+        { product: productId, branch: branchId },
+        {
+          $set: {
+            status: 'deleted',
+            particular: 'Stock deleted - record closed',
+            date: new Date(),
+            operator
+          }
         }
-      }
-    );
+      );
 
-    // 5. Optionally, delete ParkingStock records too
-    await ParkingStock.deleteMany({
-      product: productId,
-      branch: branchId
-    });
+      // Delete ParkingStock records
+      await ParkingStock.deleteMany({ product: productId, branch: branchId });
 
-    res.redirect('/manageProduct');
-
-  } catch (err) {
-    console.error('Error deleting product and related records:', err);
-    res.status(500).send('Failed to delete product and related data');
+      res.redirect('/manageProduct');
+    } catch (err) {
+      console.error('Error deleting product and related records:', err);
+      res.status(500).send('Failed to delete product and related data');
+    }
   }
-});
+);
+
 
 
 
@@ -1726,15 +1768,42 @@ router.get("/adjustStock", async (req, res) => {
 
 
 
-router.post('/delete-stock-adjustment/:id', async (req, res, next) => {
-  try {
-    await StockAdjustment.findByIdAndDelete(req.params.id);
-    res.redirect('/adjustStock'); // or wherever your page is
-  } catch (err) {
-    console.error('Error deleting adjustment:', err);
-    next(err);
+router.post(
+  '/delete-stock-adjustment/:id',
+  checkPermission('stock-adjustment'),
+  async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) return res.redirect('/');
+
+      const user = await User.findById(req.user._id)
+        .populate('branch')
+        .populate('role');
+
+      if (!user) return res.redirect('/');
+
+      const adjustment = await StockAdjustment.findById(req.params.id)
+        .populate({
+          path: 'product',
+          populate: { path: 'branch' }
+        });
+
+      if (!adjustment) return res.status(404).send('Adjustment not found');
+      if (
+        user.role.name.toLowerCase() !== 'owner' &&
+        !adjustment.product.branch._id.equals(user.branch._id)
+      ) {
+        return res.redirect('/unauthorized');
+      }
+
+      await StockAdjustment.findByIdAndDelete(req.params.id);
+
+      res.redirect('/adjustStock');
+    } catch (err) {
+      console.error('Error deleting adjustment:', err);
+      next(err);
+    }
   }
-});
+);
 
 
 router.get('/search-product', async (req, res) => {
@@ -1749,122 +1818,143 @@ router.get('/get-product/:id', async (req, res) => {
 });
 
 
-router.post('/adjust-stock', async (req, res, next) => {
-  try {
-    const { product, unitCode, adjustQty, adjustmentType, notes } = req.body;
-    const branchId = req.user?.branch;
-    const operator = req.user?._id;
+router.post(
+  '/adjust-stock',
+  checkPermission('stock-adjustment'),
+  async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) return res.redirect('/');
 
-    console.log('Adjust stock request:', { product, unitCode, adjustQty, adjustmentType, branchId });
+      const { product, unitCode, adjustQty, adjustmentType, notes } = req.body;
+      const user = await User.findById(req.user._id)
+        .populate('branch')
+        .populate('role');
 
-    if (!product || !unitCode || !adjustQty || !adjustmentType || !branchId) {
-      return res.status(400).send('Missing required fields.');
-    }
-
-    const adjustNum = parseFloat(adjustQty);
-    if (isNaN(adjustNum) || adjustNum <= 0) {
-      return res.status(400).send('Invalid adjustQty.');
-    }
-
-    const prod = await Product.findById(product);
-    if (!prod) return res.status(404).send('Product not found');
-
-    const variants = prod.variants || [];
-    const selectedUnitCode = Array.isArray(unitCode) ? unitCode[0] : unitCode;
-
-    const targetVariant = variants.find(v =>
-      (v.unitCode || '').trim().toUpperCase() === (selectedUnitCode || '').trim().toUpperCase()
-    );
-    if (!targetVariant) return res.status(404).send(`Variant not found: ${selectedUnitCode}`);
-
-    // adjust target variant qty
-    let newTargetQty = targetVariant.quantity;
-    if (adjustmentType === 'increase') {
-      newTargetQty += adjustNum;
-    } else if (adjustmentType === 'decrease') {
-      newTargetQty -= adjustNum;
-      if (newTargetQty < 0) newTargetQty = 0;
-    } else {
-      return res.status(400).send('Invalid adjustmentType');
-    }
-    targetVariant.quantity = newTargetQty;
-
-    // recalculate other variants based on totalInBaseUnit
-    let newBaseQty;
-    if (!targetVariant.totalInBaseUnit || targetVariant.totalInBaseUnit === 0) {
-      newBaseQty = newTargetQty;
-    } else {
-      newBaseQty = newTargetQty / targetVariant.totalInBaseUnit;
-    }
-
-    for (const v of variants) {
-      if (!v.totalInBaseUnit || v.totalInBaseUnit === 0) {
-        v.quantity = newBaseQty;
-      } else {
-        v.quantity = newBaseQty * v.totalInBaseUnit;
+      if (!user) return res.redirect('/');
+      if (!product || !unitCode || !adjustQty || !adjustmentType) {
+        return res.status(400).send('Missing required fields.');
       }
+
+      const adjustNum = parseFloat(adjustQty);
+      if (isNaN(adjustNum) || adjustNum <= 0) {
+        return res.status(400).send('Invalid adjustQty.');
+      }
+
+      const prod = await Product.findById(product).populate('branch');
+      if (!prod) return res.status(404).send('Product not found');
+
+      // ✅ Permission check: owner can adjust any branch, others only their branch
+      if (
+        user.role.name.toLowerCase() !== 'owner' &&
+        !prod.branch._id.equals(user.branch._id)
+      ) {
+        return res.redirect('/unauthorized');
+      }
+
+      const variants = prod.variants || [];
+      const selectedUnitCode = Array.isArray(unitCode) ? unitCode[0] : unitCode;
+
+      const targetVariant = variants.find(
+        v =>
+          (v.unitCode || '').trim().toUpperCase() ===
+          (selectedUnitCode || '').trim().toUpperCase()
+      );
+      if (!targetVariant)
+        return res.status(404).send(`Variant not found: ${selectedUnitCode}`);
+
+      // Adjust target variant quantity
+      if (adjustmentType === 'increase') {
+        targetVariant.quantity += adjustNum;
+      } else if (adjustmentType === 'decrease') {
+        targetVariant.quantity = Math.max(
+          0,
+          targetVariant.quantity - adjustNum
+        );
+      } else {
+        return res.status(400).send('Invalid adjustmentType');
+      }
+
+      // Recalculate other variants
+      const newBaseQty = !targetVariant.totalInBaseUnit
+        ? targetVariant.quantity
+        : targetVariant.quantity / targetVariant.totalInBaseUnit;
+
+      for (const v of variants) {
+        v.quantity = !v.totalInBaseUnit
+          ? newBaseQty
+          : newBaseQty * v.totalInBaseUnit;
+      }
+
+      await prod.save();
+
+      // Generate stock_ID like ADJ-BR-001
+      const branch = prod.branch;
+      const prefix = branch.branch_name.toUpperCase().slice(0, 2);
+      const stockPrefix = `ADJ-${prefix}-`;
+
+      const latestLedger = await StockLedger.findOne({
+        stock_ID: { $regex: `^${stockPrefix}` }
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const nextNumber = latestLedger?.stock_ID?.match(/\d+$/)
+        ? parseInt(latestLedger.stock_ID.match(/\d+$/)[0]) + 1
+        : 1;
+
+      const generatedStockID = `${stockPrefix}${String(nextNumber).padStart(
+        3,
+        '0'
+      )}`;
+
+      // Create StockLedger
+      await StockLedger.create({
+        date: new Date(),
+        product: prod._id,
+        branch: branch._id,
+        operator: user._id,
+        particular: 'Adjustment',
+        stock_ID: generatedStockID,
+        customer: notes || '',
+        variants: variants.map(v => ({
+          unitCode: v.unitCode,
+          stock_in:
+            adjustmentType === 'increase' &&
+            v.unitCode === selectedUnitCode
+              ? adjustNum
+              : 0,
+          stock_out:
+            adjustmentType === 'decrease' &&
+            v.unitCode === selectedUnitCode
+              ? adjustNum
+              : 0,
+          balance: v.quantity
+        })),
+        notes: notes || ''
+      });
+
+      // Create StockAdjustment record
+      await StockAdjustment.create({
+        product: prod._id,
+        adjustedBy: user._id,
+        notes,
+        variants: [
+          {
+            unitCode: selectedUnitCode,
+            adjustmentType,
+            quantity: adjustNum
+          }
+        ]
+      });
+
+      res.redirect('/adjustStock');
+    } catch (err) {
+      console.error('❌ Error adjusting stock:', err);
+      next(err);
     }
-
-    await prod.save();
-
-    // generate stock_ID like ADJ-BR-001
-    const branch = await Branch.findById(branchId);
-    if (!branch) return res.status(404).send('Branch not found');
-
-    const prefix = branch.branch_name.toUpperCase().slice(0, 2);
-    const stockPrefix = `ADJ-${prefix}-`;
-
-    const latestLedger = await StockLedger.findOne({ stock_ID: { $regex: `^${stockPrefix}` } })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    const nextNumber = latestLedger?.stock_ID?.match(/\d+$/)
-      ? parseInt(latestLedger.stock_ID.match(/\d+$/)[0]) + 1
-      : 1;
-
-    const generatedStockID = `${stockPrefix}${String(nextNumber).padStart(3, '0')}`;
-
-    console.log('Creating StockLedger with stock_ID:', generatedStockID);
-
-    // create StockLedger and save notes in `customer` field
-    const ledgerDoc = await StockLedger.create({
-      date: new Date(),
-      product: prod._id,
-      branch: branchId,
-      operator,
-      particular: 'Adjustment',
-      stock_ID: generatedStockID,
-      customer: notes || '',   // ✅ save notes in customer field
-      variants: variants.map(v => ({
-        unitCode: v.unitCode,
-        stock_in: adjustmentType === 'increase' && v.unitCode === selectedUnitCode ? adjustNum : 0,
-        stock_out: adjustmentType === 'decrease' && v.unitCode === selectedUnitCode ? adjustNum : 0,
-        balance: v.quantity
-      })),
-      notes: notes || ''
-    });
-
-    console.log('StockLedger created successfully:', ledgerDoc._id);
-
-    await StockAdjustment.create({
-      product: prod._id,
-      adjustedBy: operator,
-      notes,
-      variants: [
-        {
-          unitCode: selectedUnitCode,
-          adjustmentType,
-          quantity: adjustNum
-        }
-      ]
-    });
-
-    res.redirect('/adjustStock');
-  } catch (err) {
-    console.error('❌ Error adjusting stock:', err);
-    next(err);
   }
-});
+);
+
 
 
 
@@ -1942,137 +2032,201 @@ router.get('/price-adjustments', async (req, res) => {
   }
 });
 
-router.post('/adjust-price', async (req, res, next) => {
-  try {
-    const { product, unitCode, adjustPrice, notes } = req.body;
-    const operator = req.user ? req.user._id : null;
+router.post(
+  '/adjust-price',
+  checkPermission('price-adjustment'),
+  async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) return res.redirect('/');
 
-    if (!product || !unitCode || !adjustPrice || !operator) {
-      return res.status(400).send('Missing required fields.');
+      const { product, unitCode, adjustPrice, notes } = req.body;
+      const operator = req.user?._id;
+
+      if (!product || !unitCode || !adjustPrice || !operator) {
+        return res.status(400).send('Missing required fields.');
+      }
+
+      const newPrice = parseFloat(adjustPrice);
+      if (isNaN(newPrice) || newPrice <= 0) {
+        return res.status(400).send('Invalid adjustPrice.');
+      }
+
+      const user = await User.findById(req.user._id)
+        .populate('branch')
+        .populate('role');
+      if (!user) return res.redirect('/');
+
+      const prod = await Product.findById(product).populate('branch');
+      if (!prod) return res.status(404).send('Product not found');
+
+      // ✅ Restrict branch-level actions
+      if (
+        user.role.name.toLowerCase() !== 'owner' &&
+        !prod.branch._id.equals(user.branch._id)
+      ) {
+        return res.redirect('/unauthorized');
+      }
+
+      const variants = prod.variants || [];
+      const selectedUnitCode = Array.isArray(unitCode) ? unitCode[0] : unitCode;
+
+      const variant = variants.find(v => v.unitCode === selectedUnitCode);
+      if (!variant) return res.status(404).send('Variant not found');
+
+      const oldPrice = variant.sellPrice || 0;
+      variant.sellPrice = newPrice;
+
+      await prod.save();
+
+      await PriceAdjustment.create({
+        product: prod._id,
+        adjustedBy: operator,
+        notes,
+        variants: [
+          {
+            unitCode: selectedUnitCode,
+            oldPrice,
+            newPrice
+          }
+        ]
+      });
+
+      res.redirect('/price-adjustments');
+    } catch (err) {
+      console.error('Error adjusting price:', err);
+      next(err);
     }
+  }
+);
 
-    const newPrice = parseFloat(adjustPrice);
-    if (isNaN(newPrice) || newPrice <= 0) {
-      return res.status(400).send('Invalid adjustPrice.');
+
+router.post(
+  '/delete-price-adjustment/:id',
+  checkPermission('price-adjustment'),
+  async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) return res.redirect('/');
+
+      const adjustmentId = req.params.id;
+      const user = await User.findById(req.user._id)
+        .populate('branch')
+        .populate('role');
+      if (!user) return res.redirect('/');
+
+      const adjustment = await PriceAdjustment.findById(adjustmentId).populate({
+        path: 'product',
+        populate: { path: 'branch' }
+      });
+
+      if (!adjustment) return res.status(404).send('Price adjustment not found');
+
+      // Restrict deletion to owner or same branch
+      if (
+        user.role.name.toLowerCase() !== 'owner' &&
+        !adjustment.product.branch._id.equals(user.branch._id)
+      ) {
+        return res.redirect('/unauthorized');
+      }
+
+      await PriceAdjustment.findByIdAndDelete(adjustmentId);
+
+      res.redirect('/price-adjustments');
+    } catch (err) {
+      console.error('Error deleting price adjustment:', err);
+      next(err);
     }
-
-    const prod = await Product.findById(product);
-    if (!prod) return res.status(404).send('Product not found');
-
-    const variants = prod.variants || [];
-    const variant = variants.find(v => v.unitCode === unitCode[0]);
-    if (!variant) return res.status(404).send('Variant not found');
-
-    const oldPrice = variant.sellPrice || 0;
-    variant.sellPrice = newPrice;
-
-    await prod.save();
-
-    await PriceAdjustment.create({
-      product: prod._id,
-      adjustedBy: operator,
-      notes,
-      variants: [
-        {
-          unitCode: unitCode[0],
-          oldPrice,
-          newPrice
-        }
-      ]
-    });
-
-    res.redirect('/price-adjustments');
-  } catch (err) {
-    console.error('Error adjusting price:', err);
-    next(err);
   }
-});
-
-router.post('/delete-price-adjustment/:id', async (req, res, next) => {
-  try {
-    const adjustmentId = req.params.id;
-
-    await PriceAdjustment.findByIdAndDelete(adjustmentId);
-
-    res.redirect('/price-adjustments');
-  } catch (err) {
-    console.error('Error deleting price adjustment:', err);
-    next(err);
-  }
-});
+);
 
 
-router.get("/stockTransfer", async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
 
-  const selectedBranchId = req.query.branchId;
-  const currentSort = req.query.sort;
+router.get(
+  "/stockTransfer",
+  checkPermission("stock-transfer"),
+  async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/");
 
-  try {
-    const user = await User.findById(req.user._id).populate("branch");
-    if (!user) return res.redirect("/");
+    const selectedBranchId = req.query.branchId;
+    const currentSort = req.query.sort;
 
-    const allBranches = await Branch.find();
-    const branchToUse = selectedBranchId || user.branch._id;
+    try {
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role");
 
-    // get actual branch doc to show correct name
-    const branchDoc = allBranches.find(b => b._id.equals(branchToUse));
+      if (!user) return res.redirect("/");
 
-    // get products for selected branch
-    const products = await Product.find({ branch: branchToUse })
-      .populate('variants.supplier')
-      .populate('branch');
+      const allBranches = await Branch.find();
 
-    // sort option
-    let sortOption = { date: -1 }; // default
-    if (currentSort === "ascending") sortOption = { date: 1 };
-    else if (currentSort === "descending") sortOption = { date: -1 };
+      // If owner, allow selection of any branch; otherwise restrict to user's branch only
+      let branchToUse;
+      let branchesToShow;
 
-    // date filter
-    let dateFilter = {};
-    if (currentSort === "today") {
-      const today = new Date(); today.setHours(0,0,0,0);
-      dateFilter.date = { $gte: today };
-    } else if (currentSort === "lastMonth") {
-      const now = new Date();
-      const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-      dateFilter.date = { $gte: firstDayLastMonth, $lte: lastDayLastMonth };
-    } else if (currentSort === "last7days") {
-      const last7days = new Date();
-      last7days.setDate(last7days.getDate() - 7);
-      dateFilter.date = { $gte: last7days };
+      if (user.role.name.toLowerCase() === "owner") {
+        branchToUse = selectedBranchId || user.branch._id;
+        branchesToShow = allBranches;
+      } else {
+        branchToUse = user.branch._id;
+        branchesToShow = [user.branch];
+      }
+
+      const branchDoc = allBranches.find(b => b._id.equals(branchToUse));
+
+      const products = await Product.find({ branch: branchToUse })
+        .populate("variants.supplier")
+        .populate("branch");
+
+      let sortOption = { date: -1 };
+      if (currentSort === "ascending") sortOption = { date: 1 };
+      else if (currentSort === "descending") sortOption = { date: -1 };
+
+      let dateFilter = {};
+      if (currentSort === "today") {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        dateFilter.date = { $gte: today };
+      } else if (currentSort === "lastMonth") {
+        const now = new Date();
+        const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        dateFilter.date = { $gte: firstDayLastMonth, $lte: lastDayLastMonth };
+      } else if (currentSort === "last7days") {
+        const last7days = new Date();
+        last7days.setDate(last7days.getDate() - 7);
+        dateFilter.date = { $gte: last7days };
+      }
+
+      const transfers = await TransferStock.find({
+        $and: [
+          {
+            $or: [
+              { branch_from: branchToUse },
+              { branch_to: branchToUse }
+            ]
+          },
+          dateFilter
+        ]
+      })
+        .populate("branch_from")
+        .populate("branch_to")
+        .populate("product")
+        .sort(sortOption);
+
+      res.render("Product/stockTransfer", {
+        user,
+        ownerBranch: { branch: branchDoc },
+        branches: branchesToShow,
+        selectedBranchId: branchToUse,
+        products,
+        transfers,
+        currentSort
+      });
+    } catch (err) {
+      console.error("Error loading stockTransfer page:", err);
+      res.status(500).send("Server error.");
     }
-
-    // find transfers where selected branch is involved
-    const transfers = await TransferStock.find({
-      $and: [
-        { $or: [
-          { branch_from: branchToUse },
-          { branch_to: branchToUse }
-        ] },
-        dateFilter
-      ]
-    })
-      .populate("branch_from")
-      .populate("branch_to")
-      .populate("product")
-      .sort(sortOption);
-
-    res.render("Product/stockTransfer", {
-      user,
-      ownerBranch: { branch: branchDoc },
-      branches: allBranches,
-      selectedBranchId: branchToUse,
-      products,
-      transfers,
-      currentSort
-    });
-  } catch (err) {
-    console.error("Error loading stockTransfer page:", err);
-    res.status(500).send("Server error.");
   }
-});
+);
 
 
 
@@ -2533,69 +2687,57 @@ router.post('/delete-transfer', async (req, res, next) => {
 // STOCK ROUTE ENDS HERE 
 
 // RECEIVE STOCK ROUTE 
-router.get("/purchase-stock", (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
+router.get(
+  "/purchase-stock",
+  checkPermission("view-purchases"),
+  async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/");
 
-  const selectedBranchId = req.query.branchId;
-
-  User.findById(req.user._id)
-    .populate("branch")
-    .then(user => {
+    try {
+      const user = await User.findById(req.user._id).populate("branch role");
       if (!user) return res.redirect("/");
 
-      if (user.role === 'owner') {
-        Branch.find()
-          .then(allBranches => {
-            const branchToFilter = selectedBranchId || user.branch._id;
+      const selectedBranchId = req.query.branchId;
 
-            Promise.all([
-              ReceivedStock.find({ branch: branchToFilter })
-                .populate('supplier branch'),
-              Supplier.find().populate('supplierInvoice'),
-              Branch.findById(user.branch)
-            ])
-              .then(([stock, suppliers, ownerBranch]) => {
-                res.render("PurchaseStock/purchase-stock", {
-                  user,
-                  ownerBranch: { branch: ownerBranch },
-                  branches: allBranches,
-                  selectedBranchId: branchToFilter,
-                  stock,
-                  suppliers
-                });
-              })
-              .catch(err => {
-                console.error("Error fetching stock/suppliers:", err);
-                res.redirect("/error-404");
-              });
-          });
+      if (user.role.name === "owner") {
+        const allBranches = await Branch.find();
+        const branchToFilter = selectedBranchId || user.branch._id;
+        const [stock, suppliers, ownerBranch] = await Promise.all([
+          ReceivedStock.find({ branch: branchToFilter }).populate("supplier branch"),
+          Supplier.find().populate("supplierInvoice"),
+          Branch.findById(user.branch),
+        ]);
+
+        return res.render("PurchaseStock/purchase-stock", {
+          user,
+          ownerBranch: { branch: ownerBranch },
+          branches: allBranches,
+          selectedBranchId: branchToFilter,
+          stock,
+          suppliers,
+        });
       } else {
-        Promise.all([
-          ReceivedStock.find({ branch: user.branch._id })
-            .populate('supplier branch'),
-          Supplier.find().populate('supplierInvoice')
-        ])
-          .then(([stock, suppliers]) => {
-            res.render("PurchaseStock/purchase-stock", {
-              user,
-              ownerBranch: { branch: user.branch },
-              branches: [user.branch],
-              selectedBranchId: user.branch._id,
-              stock,
-              suppliers
-            });
-          })
-          .catch(err => {
-            console.error("Error fetching stock/suppliers:", err);
-            res.redirect("/error-404");
-          });
+        const [stock, suppliers] = await Promise.all([
+          ReceivedStock.find({ branch: user.branch._id }).populate("supplier branch"),
+          Supplier.find().populate("supplierInvoice"),
+        ]);
+
+        return res.render("PurchaseStock/purchase-stock", {
+          user,
+          ownerBranch: { branch: user.branch },
+          branches: [user.branch],
+          selectedBranchId: user.branch._id,
+          stock,
+          suppliers,
+        });
       }
-    })
-    .catch(err => {
-      console.error("Error fetching user:", err);
-      res.redirect("/error-404");
-    });
-});
+    } catch (err) {
+      console.error("Error in purchase-stock route:", err);
+      return res.redirect("/error-404");
+    }
+  }
+);
+
 
 router.post('/addReceiveStock', async (req, res, next) => {
   const {
@@ -3058,206 +3200,250 @@ router.post('/deleteReceiveStock', async (req, res, next) => {
 
 
 // UNIT CODE 
-router.get("/addUnit", async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
+router.get(
+  "/addUnit",
+  checkPermission("view-units"),
+  async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/");
 
-  const selectedBranchId = req.query.branchId;
+    const selectedBranchId = req.query.branchId;
 
-  try {
-    const user = await User.findById(req.user._id).populate("branch");
-    if (!user) return res.redirect("/");
+    try {
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role");
+      if (!user) return res.redirect("/");
 
-    const allUnits = await Unit.find().sort({ createdAt: -1 }); // optional: latest first
+      const allUnits = await Unit.find().sort({ createdAt: -1 });
 
-    if (user.role === 'owner') {
-      const allBranches = await Branch.find();
-      const branchToUse = selectedBranchId || user.branch._id;
+      if (user.role.name.toLowerCase() === "owner") {
+        const allBranches = await Branch.find();
+        const branchToUse = selectedBranchId || user.branch._id;
 
-      // 🟩 Find actual selected branch document
-      const selectedBranchDoc = allBranches.find(b => b._id.equals(branchToUse));
+        const selectedBranchDoc = allBranches.find(b => b._id.equals(branchToUse));
 
-      return res.render("Unit/unit", {
-        user,
-        ownerBranch: { branch: selectedBranchDoc },  // ✅ use actual selected branch
-        branches: allBranches,
-        selectedBranchId: branchToUse,               // ✅ keep dropdown active
-        units: allUnits
-      });
-    } else {
-      res.render("Unit/unit", {
-        user,
-        ownerBranch: { branch: user.branch },
-        branches: [user.branch],
-        selectedBranchId: user.branch._id,
-        units: allUnits
-      });
+        return res.render("Unit/unit", {
+          user,
+          ownerBranch: { branch: selectedBranchDoc },
+          branches: allBranches,
+          selectedBranchId: branchToUse,
+          units: allUnits
+        });
+      } else {
+        res.render("Unit/unit", {
+          user,
+          ownerBranch: { branch: user.branch },
+          branches: [user.branch],
+          selectedBranchId: user.branch._id,
+          units: allUnits
+        });
+      }
+    } catch (err) {
+      console.error("Error loading addUnit:", err);
+      res.redirect("/error-404");
     }
-  } catch (err) {
-    console.error("Error loading addUnit:", err);
-    res.redirect("/error-404");
   }
-});
+);
 
 
 
-router.post("/addUnit", async (req, res) => {
-  try {
-    const { unit_name, status } = req.body;
 
-    const newUnit = new Unit({
-      unit_name,
-      status: status === "on" ? "Active" : "Inactive",
-      productCount: 0
-    });
+router.post(
+  "/addUnit",
+  checkPermission("add-units"),
+  async (req, res) => {
+    try {
+      const { unit_name, status } = req.body;
 
-    await newUnit.save();
-    res.redirect("/addUnit");
-  } catch (err) {
-    console.error("Error adding unit:", err);
-    res.status(500).json({ message: "Failed to add unit", error: err.message });
+      const newUnit = new Unit({
+        unit_name,
+        status: status === "on" ? "Active" : "Inactive",
+        productCount: 0
+      });
+
+      await newUnit.save();
+      res.redirect("/addUnit");
+    } catch (err) {
+      console.error("Error adding unit:", err);
+      res.status(500).json({ message: "Failed to add unit", error: err.message });
+    }
   }
-});
+);
 
-router.post("/updateUnit/:id", async (req, res, next) => {
-  try {
-    const unitId = req.params.id;
-    const { unit_name, status } = req.body;
 
-    const updates = {
-      unit_name,
-      status: status === "on" ? "Active" : "Inactive"
-    };
+router.post(
+  "/updateUnit/:id",
+  checkPermission("modify-units"),
+  async (req, res, next) => {
+    try {
+      const unitId = req.params.id;
+      const { unit_name, status } = req.body;
 
-    await Unit.findByIdAndUpdate(unitId, updates);
-    res.redirect("/addUnit");
-  } catch (error) {
-    console.error("Failed to update unit:", error);
-    next(error);
+      const updates = {
+        unit_name,
+        status: status === "on" ? "Active" : "Inactive"
+      };
+
+      await Unit.findByIdAndUpdate(unitId, updates);
+      res.redirect("/addUnit");
+    } catch (error) {
+      console.error("Failed to update unit:", error);
+      next(error);
+    }
   }
-});
+);
 
 
-router.post("/deleteUnit/:id", async (req, res, next) => {
-  try {
-    await Unit.findByIdAndDelete(req.params.id);
-    res.redirect("/addUnit");
-  } catch (err) {
-    console.error("Error deleting unit:", err);
-    next(err);
+router.post(
+  "/deleteUnit/:id",
+  checkPermission("delete-units"),
+  async (req, res, next) => {
+    try {
+      await Unit.findByIdAndDelete(req.params.id);
+      res.redirect("/addUnit");
+    } catch (err) {
+      console.error("Error deleting unit:", err);
+      next(err);
+    }
   }
-});
+);
+
 // UNIT CODE ENDS HERE
 
 // CATEGORIES STARTS 
-router.get("/addCategory", (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
+router.get(
+  "/addCategory",
+  checkPermission("view-categories"),
+  (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/");
 
-  const selectedBranchId = req.query.branchId;
+    const selectedBranchId = req.query.branchId;
 
-  User.findById(req.user._id)
-    .populate("branch")
-    .then(user => {
-      if (!user) return res.redirect("/");
+    User.findById(req.user._id)
+      .populate("branch")
+      .then(user => {
+        if (!user) return res.redirect("/");
 
-      const renderCategoryPage = (branchList, ownerBranch, selectedBranchIdToUse) => {
-        Category.find()
-          .then(categories => {
-            res.render("Category/category", {
-              user,
-              ownerBranch: { branch: ownerBranch },           // ✅ pass actual selected branch
-              branches: branchList,
-              selectedBranchId: selectedBranchIdToUse,        // ✅ so dropdown stays active
-              categories
+        const renderCategoryPage = (branchList, ownerBranch, selectedBranchIdToUse) => {
+          Category.find()
+            .then(categories => {
+              res.render("Category/category", {
+                user,
+                ownerBranch: { branch: ownerBranch },
+                branches: branchList,
+                selectedBranchId: selectedBranchIdToUse,
+                categories
+              });
+            })
+            .catch(err => {
+              console.error("Error fetching categories:", err);
+              res.redirect("/error-404");
             });
-          })
-          .catch(err => {
-            console.error("Error fetching categories:", err);
-            res.redirect("/error-404");
-          });
-      };
+        };
 
-      if (user.role === 'owner') {
-        Branch.find()
-          .then(allBranches => {
-            const branchToUse = selectedBranchId || user.branch._id;
+        if (user.role.name === 'owner') {
+          Branch.find()
+            .then(allBranches => {
+              const branchToUse = selectedBranchId || user.branch._id;
 
-            // 🟩 Find actual selected branch doc
-            const selectedBranchDoc = allBranches.find(b => b._id.equals(branchToUse));
+              const selectedBranchDoc = allBranches.find(b => b._id.equals(branchToUse));
 
-            renderCategoryPage(allBranches, selectedBranchDoc, branchToUse);
-          })
-          .catch(err => {
-            console.error(err);
-            res.redirect("/error-404");
-          });
-      } else {
-        // Staff: always own branch
-        renderCategoryPage([user.branch], user.branch, user.branch._id);
-      }
-    })
-    .catch(err => {
-      console.error(err);
-      res.redirect("/error-404");
-    });
-});
+              renderCategoryPage(allBranches, selectedBranchDoc, branchToUse);
+            })
+            .catch(err => {
+              console.error(err);
+              res.redirect("/error-404");
+            });
+        } else {
+          // Staff: always own branch
+          renderCategoryPage([user.branch], user.branch, user.branch._id);
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        res.redirect("/error-404");
+      });
+  }
+);
 
 
-router.post("/addCategories", (req, res) => {
+
+router.post(
+  "/addCategories",
+  checkPermission("add-category"),
+  (req, res) => {
     const { category_name } = req.body;
 
     const newCategory = new Category({
       category_name
     });
-  
+
     newCategory.save()
       .then(savedCategory => {
-        res.redirect("/addCategory")
+        res.redirect("/addCategory");
       })
       .catch(err => {
-        console.error("Error adding supplier:", err);
-        res.status(500).json({ message: "Failed to add supplier", error: err.message });
+        console.error("Error adding category:", err);
+        res.status(500).json({ message: "Failed to add category", error: err.message });
       });
-});
-
-router.post("/update/category/:id", async (req, res, next) => {
-  try {
-    const { category_name } = req.body;
-    const categoryId = req.params.id;
-
-    await Category.findByIdAndUpdate(categoryId, { category_name });
-    res.redirect("/addCategory");
-  } catch (error) {
-    console.error("Update category error:", error);
-    next(error);
   }
-});
+);
 
-router.post("/delete/category/:id", async (req, res, next) => {
-  try {
-    await Category.findByIdAndDelete(req.params.id);
-    res.redirect("/addCategory");
-  } catch (error) {
-    console.error("Delete category error:", error);
-    next(error);
+
+router.post(
+  "/update/category/:id",
+  checkPermission("modify-category"),
+  async (req, res, next) => {
+    try {
+      const { category_name } = req.body;
+      const categoryId = req.params.id;
+
+      await Category.findByIdAndUpdate(categoryId, { category_name });
+      res.redirect("/addCategory");
+    } catch (error) {
+      console.error("Update category error:", error);
+      next(error);
+    }
   }
-});
+);
 
-router.post("/addCategories-product", (req, res) => {
+
+router.post(
+  "/delete/category/:id",
+  checkPermission("delete-category"),
+  async (req, res, next) => {
+    try {
+      await Category.findByIdAndDelete(req.params.id);
+      res.redirect("/addCategory");
+    } catch (error) {
+      console.error("Delete category error:", error);
+      next(error);
+    }
+  }
+);
+
+
+router.post(
+  "/addCategories-product",
+  checkPermission("add-category"),
+  (req, res) => {
     const { category_name } = req.body;
 
     const newCategory = new Category({
       category_name
     });
-  
+
     newCategory.save()
       .then(savedCategory => {
-        res.redirect("/addProduct")
+        res.redirect("/addProduct");
       })
       .catch(err => {
-        console.error("Error adding supplier:", err);
-        res.status(500).json({ message: "Failed to add supplier", error: err.message });
+        console.error("Error adding category:", err);
+        res.status(500).json({ message: "Failed to add category", error: err.message });
       });
-});
+  }
+);
+
 // CATEGORY ENDS HERE --------- TECH MAYOR GROUPS 
 
 
@@ -3332,214 +3518,221 @@ router.get("/manageBranch", (req, res) => {
   }
 });
 
-router.post("/addBranch", (req, res, next) => {
-  const { branch_name, branch_address, branch_phone } = req.body;
-  Branch.findOne({ branch_name: branch_name })
-    .then(existingBranch => {
-      if (existingBranch) {
-        return next(new Error("Branch name already exists."));
-      }
+router.post(
+  "/addBranch",
+  checkPermission("add-branch"),
+  (req, res, next) => {
+    const { branch_name, branch_address, branch_phone } = req.body;
 
-      const newBranch = new Branch({
-        branch_name,
-        branch_address,
-        branch_phone
+    Branch.findOne({ branch_name: branch_name })
+      .then(existingBranch => {
+        if (existingBranch) {
+          return next(new Error("Branch name already exists."));
+        }
+
+        const newBranch = new Branch({
+          branch_name,
+          branch_address,
+          branch_phone
+        });
+
+        return newBranch.save();
+      })
+      .then(savedBranch => {
+        if (savedBranch) {
+          res.redirect("/manageBranch");
+        }
+      })
+      .catch(err => {
+        next(err);
       });
+  }
+);
 
-      return newBranch.save();
-    })
-    .then(savedBranch => {
-      if (savedBranch) {
+
+router.post(
+  "/updateBranch",
+  checkPermission("modify-branch"),
+  (req, res) => {
+    console.log(req.body);
+
+    const updateData = {
+      branch_name: req.body.branch_name,
+      branch_address: req.body.branch_address,
+      branch_phone: req.body.branch_phone
+    };
+
+    Branch.findByIdAndUpdate(req.body.branch_id, { $set: updateData }, { new: true })
+      .then(updatedDocument => {
+        console.log("Updated Document:", updatedDocument);
         res.redirect("/manageBranch");
-      }
-    })
-    .catch(err => {
-      next(err);
-    });
-});
+      })
+      .catch(err => {
+        console.error("Error updating document:", err);
+      });
+  }
+);
 
-router.post("/updateBranch", (req, res) => {
-  console.log(req.body);
-  
-  const updateData = {
-    branch_name: req.body.branch_name,
-    branch_address: req.body.branch_address,
-    branch_phone: req.body.branch_phone
-  };
 
-  Branch.findByIdAndUpdate(req.body.branch_id, { $set: updateData }, { new: true })
-    .then(updatedDocument => {
-      console.log("Updated Document:", updatedDocument);
-      res.redirect("/manageBranch");
-    })
-    .catch(err => {
-      console.error("Error updating document:", err);
-    });
-});
+router.get(
+  "/deleteBranch/:id",
+  checkPermission("delete-branch"),
+  (req, res) => {
+    const branchId = req.params.id;
 
-router.get("/deleteBranch/:id", (req, res) => {
-  const branchId = req.params.id;
+    Branch.findByIdAndDelete(branchId)
+      .then(() => {
+        res.redirect("/manageBranch"); // or wherever your table is shown
+      })
+      .catch(err => {
+        console.error("Delete failed:", err);
+        res.redirect("/error-404");
+      });
+  }
+);
 
-  Branch.findByIdAndDelete(branchId)
-    .then(() => {
-      res.redirect("/manageBranch"); // or wherever your table is shown
-    })
-    .catch(err => {
-      console.error("Delete failed:", err);
-      res.redirect("/error-404");
-    });
-});
 
 // BRANCH ENDS HERE ----------------- TECH MAYOR GROUPS
 
 
 // STORE ROUTE STARTS HERE
-router.get("/manageParkingStore", (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
+router.get(
+  "/manageParkingStore",
+  checkPermission("view-stores"),
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role");
 
-  User.findById(req.user._id)
-    .populate("branch")
-    .then(user => {
       if (!user) return res.redirect("/");
 
-      if (user.role === 'owner') {
-        Branch.findById(user.branch)
-          .then(ownerBranch => {
-            Branch.find()
-              .then(allBranches => {
-                ParkingStore.find({ branch: user.branch })
-                  .populate('branch', 'branch_name') // Populate branch name
-                  .then(parkingStores => {
-                    res.render("Store/Store", {
-                      user,
-                      ownerBranch: { branch: ownerBranch },
-                      branches: allBranches,
-                      parkingStores
-                    });
-                  })
-                  .catch(err => {
-                    console.error("Error fetching parking stores:", err);
-                    res.redirect("/error-404");
-                  });
-              })
-              .catch(err => {
-                console.error(err);
-                res.redirect('/error-404');
-              });
-          })
-          .catch(err => {
-            console.error(err);
-            res.redirect('/error-404');
-          });
+      let branchesToUse;
+      let selectedBranchId;
+
+      if (user.role.name.toLowerCase() === "owner") {
+        // Middleware already attaches allBranches and selectedBranchId
+        branchesToUse = req.allBranches || [];
+        selectedBranchId = req.selectedBranchId;
+
+        const ownerBranch = branchesToUse.find(b =>
+          b._id.equals(selectedBranchId)
+        );
+
+        const parkingStores = await ParkingStore.find({ branch: selectedBranchId })
+          .populate("branch", "branch_name");
+
+        return res.render("Store/Store", {
+          user,
+          ownerBranch: { branch: ownerBranch },
+          branches: branchesToUse,
+          selectedBranchId,
+          parkingStores
+        });
       } else {
-        ParkingStore.find({ branch: user.branch })
-          .then(parkingStores => {
-            res.render("Store/Store", {
-              user,
-              ownerBranch: { branch: user.branch },
-              parkingStores
-            });
-          })
-          .catch(err => {
-            console.error("Error fetching parking stores:", err);
-            res.redirect("/error-404");
-          });
+        // Non-owners see only their own branch
+        branchesToUse = [user.branch];
+        selectedBranchId = user.branch._id;
+
+        const parkingStores = await ParkingStore.find({ branch: user.branch })
+          .populate("branch", "branch_name");
+
+        return res.render("Store/Store", {
+          user,
+          ownerBranch: { branch: user.branch },
+          branches: branchesToUse,
+          selectedBranchId,
+          parkingStores
+        });
       }
-    })
-    .catch(err => {
-      console.error(err);
+    } catch (err) {
+      console.error("Error fetching parking stores:", err);
       res.redirect("/error-404");
-    });
-});
-
-router.get("/stockAction", (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
-
-  User.findById(req.user._id)
-    .populate("branch")
-    .then(user => {
-      if (!user) return res.redirect("/");
-
-      if (user.role === 'owner') {
-        Branch.findById(user.branch)
-          .then(ownerBranch => {
-            Branch.find()
-              .then(allBranches => {
-                ParkingStore.find({ branch: user.branch })
-                  .populate('branch', 'branch_name') // Populate branch name
-                  .then(parkingStores => {
-                    res.render("Store/storeAction", {
-                      user,
-                      ownerBranch: { branch: ownerBranch },
-                      branches: allBranches,
-                      parkingStores
-                    });
-                  })
-                  .catch(err => {
-                    console.error("Error fetching parking stores:", err);
-                    res.redirect("/error-404");
-                  });
-              })
-              .catch(err => {
-                console.error(err);
-                res.redirect('/error-404');
-              });
-          })
-          .catch(err => {
-            console.error(err);
-            res.redirect('/error-404');
-          });
-      } else {
-        ParkingStore.find({ branch: user.branch })
-          .then(parkingStores => {
-            res.render("Store/storeAction", {
-              user,
-              ownerBranch: { branch: user.branch },
-              parkingStores
-            });
-          })
-          .catch(err => {
-            console.error("Error fetching parking stores:", err);
-            res.redirect("/error-404");
-          });
-      }
-    })
-    .catch(err => {
-      console.error(err);
-      res.redirect("/error-404");
-    });
-});
-
-router.post("/create-parking-store", (req, res) => {
-  const { storeName } = req.body;
-  const branch = req.user?.branch;
-  const userId = req.user?._id;
-
-  if (!storeName || !branch) {
-    return res.status(400).json({ error: "Store name and branch are required" });
+    }
   }
+);
 
-  // Check for existing store name in this branch
-  ParkingStore.findOne({ storeName, branch })
-    .then(existing => {
-      if (existing) {
-        return res.status(409).json({ error: "Parking store name already exists for this branch" });
+
+
+router.get(
+  "/stockAction",
+  checkPermission("modify-store"),
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role");
+
+      if (!user) return res.redirect("/");
+
+      if (user.role.name.toLowerCase() === "owner") {
+        const ownerBranch = await Branch.findById(user.branch);
+        const allBranches = await Branch.find();
+
+        const parkingStores = await ParkingStore.find({ branch: user.branch })
+          .populate("branch", "branch_name");
+
+        return res.render("Store/storeAction", {
+          user,
+          ownerBranch: { branch: ownerBranch },
+          branches: allBranches,
+          parkingStores
+        });
+      } else {
+        const parkingStores = await ParkingStore.find({ branch: user.branch })
+          .populate("branch", "branch_name");
+
+        return res.render("Store/storeAction", {
+          user,
+          ownerBranch: { branch: user.branch },
+          parkingStores
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching parking stores:", err);
+      res.redirect("/error-404");
+    }
+  }
+);
+
+
+router.post(
+  "/create-parking-store",
+  checkPermission("create-store"),
+  async (req, res) => {
+    try {
+      const { storeName } = req.body;
+      const branch = req.user?.branch;
+      const userId = req.user?._id;
+
+      if (!storeName || !branch) {
+        return res
+          .status(400)
+          .json({ error: "Store name and branch are required" });
       }
 
-      return ParkingStore.create({
+      // Check for existing store name in this branch
+      const existing = await ParkingStore.findOne({ storeName, branch });
+      if (existing) {
+        return res
+          .status(409)
+          .json({ error: "Parking store name already exists for this branch" });
+      }
+
+      await ParkingStore.create({
         storeName,
         branch,
         createdBy: userId
       });
-    })
-    .then(newStore => {
-      res.redirect("/manageParkingStore")
-    })
-    .catch(err => {
+
+      res.redirect("/manageParkingStore");
+    } catch (err) {
       console.error("Error creating parking store:", err);
       res.status(500).json({ error: "Internal server error" });
-    });
-});
+    }
+  }
+);
+
 
 
 router.get('/searchProduct', async (req, res) => {
@@ -3564,37 +3757,53 @@ router.get('/searchProduct', async (req, res) => {
 });
 
 
-router.post("/updateStore", (req, res) => {
-  const updateData = {
-    storeName: req.body.storeName
-  };
+router.post(
+  "/updateStore",
+  checkPermission("modify-store"),
+  (req, res) => {
+    const updateData = {
+      storeName: req.body.storeName
+    };
 
-  ParkingStore.findByIdAndUpdate(req.body.store_id, { $set: updateData }, { new: true })
-    .then(updatedDocument => {
-      res.redirect("/manageParkingStore");
-    })
-    .catch(err => {
-      console.error("Error updating document:", err);
-    });
-});
+    ParkingStore.findByIdAndUpdate(req.body.store_id, { $set: updateData }, { new: true })
+      .then(updatedDocument => {
+        res.redirect("/manageParkingStore");
+      })
+      .catch(err => {
+        console.error("Error updating document:", err);
+        res.status(500).send("Internal server error");
+      });
+  }
+);
 
-router.get("/deleteStore/:id", (req, res) => {
-  const storeId = req.params.id;
 
-  ParkingStore.findByIdAndDelete(storeId)
-    .then(() => {
-      res.redirect("/manageParkingStore");
-    })
-    .catch(err => {
-      res.redirect("/error-404");
-    });
-});
+router.get(
+  "/deleteStore/:id",
+  checkPermission("delete-store"),
+  (req, res) => {
+    const storeId = req.params.id;
+
+    ParkingStore.findByIdAndDelete(storeId)
+      .then(() => {
+        res.redirect("/manageParkingStore");
+      })
+      .catch(err => {
+        console.error("Error deleting store:", err);
+        res.redirect("/error-404");
+      });
+  }
+);
+
 
 // STORE ENDS HERE ----------------- TECH MAYOR GROUPS
 
 // SALES ROUTE STARTS HERE 
-router.get("/createSales", (req, res, next) => {
-  if (req.isAuthenticated()) {
+router.get(
+  "/createSales",
+  checkPermission("view-sales"),
+  (req, res, next) => {
+    if (!req.isAuthenticated()) return res.redirect("/");
+
     User.findById(req.user._id)
       .populate("branch")
       .then(user => {
@@ -3604,8 +3813,8 @@ router.get("/createSales", (req, res, next) => {
 
         const fetchCustomersAndProducts = (ownerBranch, allBranches) => {
           Promise.all([
-            Customer.find({ branch: branchId }).sort({ createdAt: -1 }),
-            Product.find({ branch: branchId }).sort({ createdAt: -1 }),
+            Customer.find({ branch: ownerBranch._id || ownerBranch }).sort({ createdAt: -1 }),
+            Product.find({ branch: ownerBranch._id || ownerBranch }).sort({ createdAt: -1 }),
             Category.find({}),
             Config.findOne({ key: "negativeSalesActive" })
           ])
@@ -3613,13 +3822,13 @@ router.get("/createSales", (req, res, next) => {
               const negativeSalesActive = config?.value === true;
 
               res.render("Sales/createSales", {
-                user: user,
+                user,
                 ownerBranch: { branch: ownerBranch },
                 branches: allBranches || [],
-                customers: customers,
-                products: products,
-                categories: categories,
-                negativeSalesActive: negativeSalesActive
+                customers,
+                products,
+                categories,
+                negativeSalesActive
               });
             })
             .catch(err => {
@@ -3628,7 +3837,7 @@ router.get("/createSales", (req, res, next) => {
             });
         };
 
-        if (user.role === 'owner') {
+        if (user.role === "owner") {
           Branch.findById(branchId)
             .then(ownerBranch => {
               Branch.find()
@@ -3652,10 +3861,9 @@ router.get("/createSales", (req, res, next) => {
         console.error("Error fetching user:", err);
         next(err);
       });
-  } else {
-    res.redirect("/");
   }
-});
+);
+
 
 router.post("/settings/toggle-negative-sales", async (req, res) => {
   if (!req.isAuthenticated() || req.user.role !== 'owner') {
@@ -3764,77 +3972,55 @@ router.get('/receipt/:invoiceId', async (req, res, next) => {
   }
 });
 
-router.get("/manage-sales", (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
+router.get(
+  "/manage-sales",
+  checkPermission("view-sales"),
+  async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/");
 
-  User.findById(req.user._id)
-    .populate("branch")
-    .then(user => {
+    try {
+      // Populate role as well (assuming role is a ref)
+      const user = await User.findById(req.user._id).populate("branch role");
       if (!user) return res.redirect("/");
 
       const branchId = user.branch._id || user.branch;
 
-      if (user.role === 'owner') {
-        // If user is owner, fetch owner branch and all branches
-        Branch.findById(branchId)
-          .then(ownerBranch => {
-            Branch.find()
-              .then(allBranches => {
-                Invoice.find({ branch: branchId })
-                  .populate("customer_id")
-                  .populate("createdBy")
-                  .sort({ createdAt: -1 })
-                  .then(invoices => {
-                    res.render("Sales/manage-sales", {
-                      user,
-                      ownerBranch: { branch: ownerBranch },
-                      branches: allBranches,
-                      invoices
-                    });
-                  })
-                  .catch(err => {
-                    console.error("Error fetching invoices:", err);
-                    res.redirect("/error-404");
-                  });
-              })
-              .catch(err => {
-                console.error("Error fetching all branches:", err);
-                res.redirect("/error-404");
-              });
-          })
-          .catch(err => {
-            console.error("Error fetching owner branch:", err);
-            res.redirect("/error-404");
-          });
-      } else {
-        // If not owner, just fetch invoices for user's branch
-        Invoice.find({ branch: branchId })
+      // Always fetch all branches (for header dropdown)
+      const allBranches = await Branch.find();
+
+      if (user.role.name === "owner") {
+        const ownerBranch = await Branch.findById(branchId);
+
+        const invoices = await Invoice.find({ branch: branchId })
           .populate("customer_id")
           .populate("createdBy")
-          .sort({ createdAt: -1 })
-          .then(invoices => {
-            res.render("Sales/manage-sales", {
-              user,
-              ownerBranch: { branch: user.branch },
-              invoices
-            });
-          })
-          .catch(err => {
-            console.error("Error fetching invoices:", err);
-            res.redirect("/error-404");
-          });
+          .sort({ createdAt: -1, _id: -1 });
+
+        return res.render("Sales/manage-sales", {
+          user,
+          ownerBranch: { branch: ownerBranch },
+          branches: allBranches,       // important for header.ejs
+          invoices,
+        });
+      } else {
+        const invoices = await Invoice.find({ branch: branchId })
+          .populate("customer_id")
+          .populate("createdBy")
+          .sort({ createdAt: -1, _id: -1 });
+
+        return res.render("Sales/manage-sales", {
+          user,
+          ownerBranch: { branch: user.branch },
+          branches: allBranches,       // important for header.ejs
+          invoices,
+        });
       }
-    })
-    .catch(err => {
-      console.error("Error fetching user:", err);
-      res.redirect("/error-404");
-    });
-});
-
-
-
-
-
+    } catch (err) {
+      console.error("Error in manage-sales route:", err);
+      return res.redirect("/error-404");
+    }
+  }
+);
 
 
 
@@ -4176,64 +4362,147 @@ router.get("/lowStock", async (req, res) => {
 // EXPENSE ROUTE STARTS HERE
 
 router.get("/expense", (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
+  if (!req.isAuthenticated()) {
+    return res.redirect("/");
+  }
+
+  const selectedBranchId = req.query.branchId; // ✅ from dropdown link
 
   User.findById(req.user._id)
     .populate("branch")
     .then(user => {
       if (!user) return res.redirect("/");
 
-      Promise.all([
-        Expense.find({ branch: user.branch._id })
-          .populate("branch")
-          .populate("category"),
-        ExpenseCategory.find()
-      ])
-        .then(([expenses, expenseCategories]) => {
-          res.render("Expense/expense", {
-            user,
-            ownerBranch: { branch: user.branch },
-            expenses,
-            expenseCategories
+      if (user.role === "owner") {
+        Branch.findById(user.branch)
+          .then(ownerBranch => {
+            Branch.find()
+              .then(allBranches => {
+                const branchToUse = selectedBranchId || ownerBranch._id; // ✅ switch branch if selected
+                Promise.all([
+                  Expense.find({ branch: branchToUse })
+                    .populate("branch")
+                    .populate("category"),
+                  ExpenseCategory.find({ branch: branchToUse }) // ✅ optional: filter categories too
+                ])
+                  .then(([expenses, expenseCategories]) => {
+                    res.render("Expense/expense", {
+                      user,
+                      ownerBranch: { branch: ownerBranch },
+                      branches: allBranches,
+                      expenses,
+                      expenseCategories
+                    });
+                  })
+                  .catch(err => {
+                    console.error("Error fetching expenses or categories:", err);
+                    res.redirect("/error-404");
+                  });
+              })
+              .catch(err => {
+                console.error("Error fetching branches:", err);
+                res.redirect("/error-404");
+              });
+          })
+          .catch(err => {
+            console.error("Error fetching owner branch:", err);
+            res.redirect("/error-404");
           });
-        })
-        .catch(err => {
-          console.error("Error fetching expenses or categories:", err);
-          res.redirect("/error-404");
-        });
+
+      } else {
+        const branchToUse = selectedBranchId || user.branch._id;
+        Promise.all([
+          Expense.find({ branch: branchToUse })
+            .populate("branch")
+            .populate("category"),
+          ExpenseCategory.find({ branch: branchToUse })
+        ])
+          .then(([expenses, expenseCategories]) => {
+            res.render("Expense/expense", {
+              user,
+              ownerBranch: { branch: user.branch },
+              branches: [user.branch],
+              expenses,
+              expenseCategories
+            });
+          })
+          .catch(err => {
+            console.error("Error fetching expenses or categories:", err);
+            res.redirect("/error-404");
+          });
+      }
     })
     .catch(err => {
       console.error("Error fetching user:", err);
       res.redirect("/error-404");
     });
 });
+
+
 
 router.get("/expense-category", (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
+  if (!req.isAuthenticated()) {
+    return res.redirect("/");
+  }
 
   User.findById(req.user._id)
     .populate("branch")
     .then(user => {
       if (!user) return res.redirect("/");
 
-      ExpenseCategory.find({})
-        .then(expenseCategories => {
-          res.render("Expense/expense-category", {
-            user,
-            ownerBranch: { branch: user.branch },
-            expenseCategories
+      if (user.role === "owner") {
+        // Owner: fetch all branches
+        Branch.findById(user.branch)
+          .then(ownerBranch => {
+            Branch.find()
+              .then(allBranches => {
+                ExpenseCategory.find({})
+                  .then(expenseCategories => {
+                    res.render("Expense/expense-category", {
+                      user,
+                      ownerBranch: { branch: ownerBranch },
+                      branches: allBranches, // ✅ Pass branches
+                      expenseCategories
+                    });
+                  })
+                  .catch(err => {
+                    console.error("Error fetching expense categories:", err);
+                    res.redirect("/error-404");
+                  });
+              })
+              .catch(err => {
+                console.error("Error fetching branches:", err);
+                res.redirect("/error-404");
+              });
+          })
+          .catch(err => {
+            console.error("Error fetching owner branch:", err);
+            res.redirect("/error-404");
           });
-        })
-        .catch(err => {
-          console.error("Error fetching expenses:", err);
-          res.redirect("/error-404");
-        });
+
+      } else {
+        // Non-owner: pass only their branch
+        ExpenseCategory.find({})
+          .then(expenseCategories => {
+            res.render("Expense/expense-category", {
+              user,
+              ownerBranch: { branch: user.branch },
+              branches: [user.branch], // ✅ Still pass as array
+              expenseCategories
+            });
+          })
+          .catch(err => {
+            console.error("Error fetching expense categories:", err);
+            res.redirect("/error-404");
+          });
+      }
     })
     .catch(err => {
       console.error("Error fetching user:", err);
       res.redirect("/error-404");
     });
 });
+
 
 router.post("/addExpenseCategory", (req, res) => {
   const { name, description } = req.body;
@@ -4265,37 +4534,35 @@ router.post("/addExpenseCategory", (req, res) => {
 });
 
 
-router.post("/addExpense", (req, res) => {
-  const { title, description, category, date, amount } = req.body;
-
+router.post("/addExpense", checkPermission("add-expenses"), async (req, res) => {
   if (!req.isAuthenticated()) {
     return res.redirect('/');
   }
 
-  User.findById(req.user._id)
-    .then(user => {
-      if (!user) return res.redirect('/');
+  const { title, description, category, date, amount } = req.body;
 
-      const newExpense = new Expense({
-        title,
-        description,
-        category,
-        date,
-        amount,
-        branch: user.branch,
-        created_by: user._id // ✅ Important: Track who created the expense
-      });
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.redirect('/');
 
-      return newExpense.save();
-    })
-    .then(() => {
-      res.redirect('/expense');
-    })
-    .catch(err => {
-      console.error("Error adding expense:", err); // corrected log
-      res.status(500).send("Internal Server Error");
+    const newExpense = new Expense({
+      title,
+      description,
+      category,
+      date,
+      amount,
+      branch: user.branch,
+      created_by: user._id // track who created the expense
     });
+
+    await newExpense.save();
+    res.redirect('/expense');
+  } catch (err) {
+    console.error("Error adding expense:", err);
+    res.status(500).send("Internal Server Error");
+  }
 });
+
 
 
 // Update Expense
@@ -4345,67 +4612,73 @@ router.post('/deleteExpenseCategory', (req, res) => {
 // EXPENSE ROUTE ENDS HERE ----------------- TECH MAYOR GROUPS
 
 // TRANSACTIONS ROUTE STARTS HERE
-router.get("/transactions", async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
+router.get(
+  "/transactions",
+  checkPermission("view-payments"),
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role"); // ensure role is populated for owner check
 
-  try {
-    const user = await User.findById(req.user._id).populate("branch");
-    if (!user) return res.redirect("/");
+      if (!user) return res.redirect("/");
 
-    const branchId = user.branch._id || user.branch;
+      const branchId = user.branch._id || user.branch;
 
-    const [ownerBranch, allBranches] = user.role === 'owner'
-      ? await Promise.all([
-          Branch.findById(branchId),
-          Branch.find()
-        ])
-      : [user.branch, null];
+      const [ownerBranch, allBranches] =
+        user.role?.name === "owner"
+          ? await Promise.all([
+              Branch.findById(branchId),
+              Branch.find()
+            ])
+          : [user.branch, null];
 
-    const [customers, loans, transactionsRaw] = await Promise.all([
-      Customer.find({ branch: branchId }),
-      Loan.find({ branch: branchId }),
-      Transaction.find({ branch: branchId })
-        .sort({ paymentDate: -1 })
-        .populate("userId")
-    ]);
+      const [customers, loans, transactionsRaw] = await Promise.all([
+        Customer.find({ branch: branchId }),
+        Loan.find({ branch: branchId }),
+        Transaction.find({ branch: branchId })
+          .sort({ paymentDate: -1 })
+          .populate("userId")
+      ]);
 
-    // Format currency helper
-    const formatCurrency = (amount) =>
-      new Intl.NumberFormat("en-NG", {
-        style: "currency",
-        currency: "NGN",
-        minimumFractionDigits: 0
-      }).format(amount);
+      // Format currency helper
+      const formatCurrency = (amount) =>
+        new Intl.NumberFormat("en-NG", {
+          style: "currency",
+          currency: "NGN",
+          minimumFractionDigits: 0
+        }).format(amount);
 
-    // Format transactions with userName and currency
-    const transactions = transactionsRaw.map(tx => {
-      const userName = tx.transactionType === "Customer"
-        ? tx.userId?.customer_name
-        : tx.userId?.loaner;
+      // Format transactions with userName and currency
+      const transactions = transactionsRaw.map((tx) => {
+        const userName =
+          tx.transactionType === "Customer"
+            ? tx.userId?.customer_name
+            : tx.userId?.loaner;
 
-      return {
-        ...tx.toObject(),
-        userName,
-        expectedAmountFormatted: formatCurrency(tx.expectedAmount),
-        amountReceivedFormatted: formatCurrency(tx.amountReceived),
-        balanceRemainingFormatted: formatCurrency(tx.balanceRemaining)
-      };
-    });
+        return {
+          ...tx.toObject(),
+          userName,
+          expectedAmountFormatted: formatCurrency(tx.expectedAmount),
+          amountReceivedFormatted: formatCurrency(tx.amountReceived),
+          balanceRemainingFormatted: formatCurrency(tx.balanceRemaining)
+        };
+      });
 
-    res.render("Transaction/transaction", {
-      user,
-      ownerBranch: { branch: ownerBranch },
-      branches: allBranches,
-      customers,
-      loans,
-      transactions // use this in your EJS
-    });
-
-  } catch (err) {
-    console.error("Error in /transactions route:", err);
-    res.redirect("/error-404");
+      res.render("Transaction/transaction", {
+        user,
+        ownerBranch: { branch: ownerBranch },
+        branches: allBranches,
+        customers,
+        loans,
+        transactions
+      });
+    } catch (err) {
+      console.error("Error in /transactions route:", err);
+      res.redirect("/error-404");
+    }
   }
-});
+);
 
 router.get("/searchClient", async (req, res) => {
   const { q, type } = req.query;
@@ -4447,82 +4720,168 @@ router.get("/searchClient", async (req, res) => {
 
 
 // REPORTS ROUTE STARTS HERE
-router.get("/sales-report", async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
+router.get(
+  "/sales-report",
+  checkPermission("sales-report"),
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role"); // ensure role is loaded for middleware and owner checks
 
-  try {
-    const user = await User.findById(req.user._id).populate("branch");
-    if (!user) return res.redirect("/");
+      if (!user) return res.redirect("/");
 
-    const branchId = user.branch._id || user.branch;
+      const branchId = user.branch._id || user.branch;
 
-    // Get filters from query
-    const { startDate, endDate, salesType } = req.query;
+      // Get filters from query
+      const { startDate, endDate, salesType } = req.query;
 
-    let salesLedgers = [];   // default: empty (table hidden)
+      let salesLedgers = []; // default empty table
 
-    // Only query if date range provided
-    if (startDate && endDate) {
-      // Build dynamic filter
-      const filter = {
-        branch: branchId,
-        sale_date: {
-          $gte: new Date(startDate),
-          $lte: new Date(endDate)
+      // Only query if date range provided
+      if (startDate && endDate) {
+        const filter = {
+          branch: branchId,
+          sale_date: {
+            $gte: new Date(startDate),
+            $lte: new Date(endDate)
+          }
+        };
+
+        if (salesType && salesType !== "all") {
+          filter.sales_type = salesType; // 'cash' or 'credit'
         }
+
+        salesLedgers = await SalesLedger.find(filter)
+          .populate("product")
+          .populate("customer")
+          .populate("operator")
+          .sort({ sale_date: -1 });
+      }
+
+      // Totals calculation
+      let totalAmount = 0;
+      let totalCash = 0;
+      let totalCredit = 0;
+
+      salesLedgers.forEach(sale => {
+        const amount = Number(sale.amount) || 0;
+        totalAmount += amount;
+
+        if (sale.sales_type === "cash") {
+          totalCash += amount;
+        } else {
+          totalCredit += amount;
+        }
+      });
+
+      const renderData = {
+        user,
+        salesLedgers,
+        totalAmount,
+        totalCash,
+        totalCredit,
+        filters: { startDate, endDate, salesType }
       };
 
-      if (salesType && salesType !== 'all') {
-        filter.sales_type = salesType;  // 'cash' or 'credit'
-      }
-
-      salesLedgers = await SalesLedger.find(filter)
-        .populate("product")
-        .populate("customer")
-        .populate("operator")
-        .sort({ sale_date: -1 });
-    }
-
-    // Totals logic
-    let totalAmount = 0;
-    let totalCash = 0;
-    let totalCredit = 0;
-
-    salesLedgers.forEach(sale => {
-      const amount = Number(sale.amount) || 0;
-      totalAmount += amount;
-
-      if (sale.sales_type === 'cash') {
-        totalCash += amount;
+      if (user.role?.name === "owner") {
+        const [ownerBranch, allBranches] = await Promise.all([
+          Branch.findById(branchId),
+          Branch.find()
+        ]);
+        renderData.ownerBranch = { branch: ownerBranch };
+        renderData.branches = allBranches;
       } else {
-        totalCredit += amount;
+        renderData.ownerBranch = { branch: user.branch };
       }
-    });
 
-    const renderData = {
-      user,
-      salesLedgers,
-      totalAmount,
-      totalCash,
-      totalCredit,
-      filters: { startDate, endDate, salesType }
-    };
-
-    if (user.role === "owner") {
-      const ownerBranch = await Branch.findById(branchId);
-      const allBranches = await Branch.find();
-      renderData.ownerBranch = { branch: ownerBranch };
-      renderData.branches = allBranches;
-    } else {
-      renderData.ownerBranch = { branch: user.branch };
+      res.render("Report/Sales/sales-report", renderData);
+    } catch (err) {
+      console.error("Error loading sales-report:", err);
+      res.redirect("/error-404");
     }
-
-    res.render("Report/Sales/sales-report", renderData);
-  } catch (err) {
-    console.error("Error loading sales-report:", err);
-    res.redirect("/error-404");
   }
-});
+);
+
+router.get(
+  "/expense-report",
+  checkPermission("expense-report"),
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role");
+
+      if (!user) return res.redirect("/");
+
+      const branchId = user.branch._id || user.branch;
+
+      const { startDate, endDate, salesType } = req.query;
+
+      let salesLedgers = [];
+
+      if (startDate && endDate) {
+        const filter = {
+          branch: branchId,
+          sale_date: {
+            $gte: new Date(startDate),
+            $lte: new Date(endDate),
+          },
+        };
+
+        if (salesType && salesType !== "all") {
+          filter.sales_type = salesType;
+        }
+
+        salesLedgers = await SalesLedger.find(filter)
+          .populate("product")
+          .populate("customer")
+          .populate("operator")
+          .sort({ sale_date: -1 });
+      }
+
+      let totalAmount = 0,
+        totalCash = 0,
+        totalCredit = 0;
+
+      salesLedgers.forEach((sale) => {
+        const amount = Number(sale.amount) || 0;
+        totalAmount += amount;
+
+        if (sale.sales_type === "cash") {
+          totalCash += amount;
+        } else {
+          totalCredit += amount;
+        }
+      });
+
+      const renderData = {
+        user,
+        salesLedgers,
+        totalAmount,
+        totalCash,
+        totalCredit,
+        filters: { startDate, endDate, salesType },
+      };
+
+      if (user.role?.name === "owner") {
+        const [ownerBranch, allBranches] = await Promise.all([
+          Branch.findById(branchId),
+          Branch.find(),
+        ]);
+        renderData.ownerBranch = { branch: ownerBranch };
+        renderData.branches = allBranches;
+      } else {
+        renderData.ownerBranch = { branch: user.branch };
+      }
+
+      res.render("Report/Expense/expense-report", renderData);
+    } catch (err) {
+      console.error("Error loading expense-report:", err);
+      res.redirect("/error-404");
+    }
+  }
+);
 
 router.get("/sales-report-summary", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/");
@@ -4645,57 +5004,46 @@ router.get("/sales-report-summaryt", (req, res) => {
   }
 });
 
-router.get("/customer-report", (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.redirect("//");
-  }
+router.get(
+  "/customer-report",
+  checkPermission("customer-report"),
+  async (req, res) => {
+    try {
+      const { customerId, startDate, endDate } = req.query;
+      const query = customerId ? { customer: customerId } : null;
 
-  const { customerId, startDate, endDate } = req.query;
-  const query = customerId ? { customer: customerId } : null;
+      if (startDate && endDate && query) {
+        query.date = {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate),
+        };
+      }
 
-  if (startDate && endDate && query) {
-    query.date = {
-      $gte: new Date(startDate),
-      $lte: new Date(endDate),
-    };
-  }
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role");
+      if (!user) return res.redirect("/");
 
-  User.findById(req.user._id)
-    .populate("branch")
-    .then(user => {
-      if (!user) return res.redirect("//");
+      const renderView = async (ownerBranch, branches = []) => {
+        try {
+          const entries = query
+            ? await CustomerLedger.find(query)
+                .populate("customer", "customer_name")
+                .populate("branch", "branch_name")
+                .sort({ date: 1 })
+            : [];
 
-      const renderView = (ownerBranch, branches = []) => {
-        if (query) {
-          CustomerLedger.find(query)
-            .populate("customer", "customer_name")
-            .populate("branch", "branch_name")
-            .sort({ date: 1 })
-            .then(entries => {
-              res.render("Report/Customer/customer-report", {
-                user,
-                ownerBranch: { branch: ownerBranch },
-                branches,
-                entries,
-                startDate,
-                endDate,
-                customerId,
-              });
-            })
-            .catch(err => {
-              console.error("Ledger Report Error:", err);
-              res.render("Report/Customer/customer-report", {
-                user,
-                ownerBranch: { branch: ownerBranch },
-                branches,
-                entries: [],
-                startDate,
-                endDate,
-                customerId,
-                error: "Error retrieving ledger data",
-              });
-            });
-        } else {
+          res.render("Report/Customer/customer-report", {
+            user,
+            ownerBranch: { branch: ownerBranch },
+            branches,
+            entries,
+            startDate,
+            endDate,
+            customerId,
+          });
+        } catch (err) {
+          console.error("Ledger Report Error:", err);
           res.render("Report/Customer/customer-report", {
             user,
             ownerBranch: { branch: ownerBranch },
@@ -4704,100 +5052,100 @@ router.get("/customer-report", (req, res) => {
             startDate,
             endDate,
             customerId,
+            error: "Error retrieving ledger data",
           });
         }
       };
 
-      if (user.role === 'owner') {
-        Branch.findById(user.branch)
-          .then(ownerBranch => {
-            Branch.find()
-              .then(allBranches => renderView(ownerBranch, allBranches))
-              .catch(err => {
-                console.error(err);
-                res.redirect("/error-404");
-              });
-          })
-          .catch(err => {
-            console.error(err);
-            res.redirect("/error-404");
-          });
+      if (user.role?.name === "owner") {
+        const [ownerBranch, allBranches] = await Promise.all([
+          Branch.findById(user.branch),
+          Branch.find(),
+        ]);
+        await renderView(ownerBranch, allBranches);
       } else {
-        renderView(user.branch);
+        await renderView(user.branch);
       }
-    })
-    .catch(err => {
+    } catch (err) {
       console.error(err);
       res.redirect("/error-404");
-    });
-});
-
-router.get("/stock-report", async (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.redirect("/");
+    }
   }
+);
 
-  try {
-    const user = await User.findById(req.user._id).populate("branch");
-    if (!user) return res.redirect("/");
+router.get(
+  "/stock-report",
+  checkPermission("stock-report"),
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role"); // ensure owner check works
 
-    const { productId, startDate, endDate } = req.query;
-    const branchId = user.branch._id;
+      if (!user) return res.redirect("/");
 
-    const filters = { productId, startDate, endDate };
+      const { productId, startDate, endDate } = req.query;
+      const branchId = user.branch._id;
+      const filters = { productId, startDate, endDate };
 
-    const stockQuery = { branch: branchId };
+      const stockQuery = { branch: branchId };
 
-    if (productId) {
-      stockQuery.product = productId;
-    }
-
-    if (startDate || endDate) {
-      stockQuery.date = {};
-      if (startDate) stockQuery.date.$gte = new Date(startDate);
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        stockQuery.date.$lte = end;
+      if (productId) {
+        stockQuery.product = productId;
       }
-    }
 
-    const stockLedgers = await StockLedger.find(stockQuery)
-      .populate("product")
-      .populate("branch", "branch_name")
-      .populate("operator", "fullname")
-      .sort({ createdAt: 1 })
+      if (startDate || endDate) {
+        stockQuery.date = {};
+        if (startDate) stockQuery.date.$gte = new Date(startDate);
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          stockQuery.date.$lte = end;
+        }
+      }
 
-    console.log("StockLedgers found:", stockLedgers.length);
-    console.log(stockLedgers.map(l => ({
-      stock_ID: l.stock_ID, particular: l.particular, date: l.date
-    })));
+      const stockLedgers = await StockLedger.find(stockQuery)
+        .populate("product")
+        .populate("branch", "branch_name")
+        .populate("operator", "fullname")
+        .sort({ createdAt: 1 });
 
-    if (user.role === 'owner') {
-      const ownerBranch = await Branch.findById(branchId);
-      const allBranches = await Branch.find();
+      console.log("StockLedgers found:", stockLedgers.length);
+      console.log(
+        stockLedgers.map(l => ({
+          stock_ID: l.stock_ID,
+          particular: l.particular,
+          date: l.date
+        }))
+      );
 
-      return res.render("Report/Stock/stock-report", {
+      if (user.role?.name === "owner") {
+        const [ownerBranch, allBranches] = await Promise.all([
+          Branch.findById(branchId),
+          Branch.find()
+        ]);
+
+        return res.render("Report/Stock/stock-report", {
+          user,
+          ownerBranch: { branch: ownerBranch },
+          branches: allBranches,
+          stockLedgers: productId ? stockLedgers : undefined,
+          filters
+        });
+      }
+
+      res.render("Report/Stock/stock-report", {
         user,
-        ownerBranch: { branch: ownerBranch },
-        branches: allBranches,
+        ownerBranch: { branch: user.branch },
         stockLedgers: productId ? stockLedgers : undefined,
         filters
       });
+    } catch (err) {
+      console.error(err);
+      res.redirect("/error-404");
     }
-
-    res.render("Report/Stock/stock-report", {
-      user,
-      ownerBranch: { branch: user.branch },
-      stockLedgers: productId ? stockLedgers : undefined,
-      filters
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.redirect("/error-404");
   }
-});
+);
 
 
 router.get('/api/products/search', async (req, res) => {
@@ -4822,275 +5170,292 @@ router.get('/api/products/search', async (req, res) => {
 });
 
 
-router.get("/sold-stock-report", async (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.redirect("/");
-  }
+router.get(
+  "/sold-stock-report",
+  checkPermission("sold-stock"),
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role");
 
-  try {
-    const user = await User.findById(req.user._id).populate("branch");
-    if (!user) return res.redirect("/");
+      if (!user) return res.redirect("/");
 
-    const { productId, startDate, endDate } = req.query;
-    const branchId = user.branch._id;
+      const { productId, startDate, endDate } = req.query;
+      const branchId = user.branch._id;
 
-    const filters = { productId, startDate, endDate }; // add this!
+      const filters = { productId, startDate, endDate };
 
-    const stockQuery = {
-      branch: branchId,
-    };
+      const stockQuery = { branch: branchId };
 
-    if (productId) {
-      stockQuery.product = productId;
-    }
+      if (productId) {
+        stockQuery.product = productId;
+      }
 
-    if (startDate || endDate) {
-      stockQuery.date = {};
-      if (startDate) stockQuery.date.$gte = new Date(startDate);
-      if (endDate) stockQuery.date.$lte = new Date(endDate);
-    }
+      if (startDate || endDate) {
+        stockQuery.date = {};
+        if (startDate) stockQuery.date.$gte = new Date(startDate);
+        if (endDate) stockQuery.date.$lte = new Date(endDate);
+      }
 
-    const stockLedgers = await StockLedger.find(stockQuery)
-      .populate("product")
-      .populate("branch", "branch_name")
-      .populate("operator", "fullname")
-      .sort({ date: 1 });
+      const stockLedgers = await StockLedger.find(stockQuery)
+        .populate("product")
+        .populate("branch", "branch_name")
+        .populate("operator", "fullname")
+        .sort({ date: 1 });
 
-    if (user.role === 'owner') {
-      const ownerBranch = await Branch.findById(branchId);
-      const allBranches = await Branch.find();
+      if (user.role?.name === "owner") {
+        const [ownerBranch, allBranches] = await Promise.all([
+          Branch.findById(branchId),
+          Branch.find()
+        ]);
 
-      return res.render("Report/Stock/sold-stock", {
+        return res.render("Report/Stock/sold-stock", {
+          user,
+          ownerBranch: { branch: ownerBranch },
+          branches: allBranches,
+          stockLedgers: productId ? stockLedgers : undefined,
+          filters
+        });
+      }
+
+      res.render("Report/Stock/sold-stock", {
         user,
-        ownerBranch: { branch: ownerBranch },
-        branches: allBranches,
+        ownerBranch: { branch: user.branch },
         stockLedgers: productId ? stockLedgers : undefined,
         filters
       });
+    } catch (err) {
+      console.error(err);
+      res.redirect("/error-404");
     }
-
-    res.render("Report/Stock/sold-stock", {
-      user,
-      ownerBranch: { branch: user.branch },
-      stockLedgers: productId ? stockLedgers : undefined,
-      filters
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.redirect("/error-404");
   }
-});
+);
 
-router.get('/parking-stock-report', async (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.redirect('/');
-  }
+router.get(
+  "/parking-stock-report",
+  checkPermission("parking-stock-report"),
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role");
 
-  try {
-    const user = await User.findById(req.user._id).populate('branch');
-    if (!user) return res.redirect('/');
+      if (!user) return res.redirect("/");
 
-    const branchId = user.branch._id;
-    const { productId, parkingStoreId, startDate, endDate } = req.query;
+      const branchId = user.branch._id;
+      const { productId, parkingStoreId, startDate, endDate } = req.query;
 
-    const filters = { productId, parkingStoreId, startDate, endDate };
+      const filters = { productId, parkingStoreId, startDate, endDate };
 
-    const ledgerQuery = { branch: branchId };
+      const ledgerQuery = { branch: branchId };
 
-    if (productId) {
-      ledgerQuery.product = productId;
-    }
-
-    if (parkingStoreId) {
-      ledgerQuery.parkingStore = parkingStoreId;
-    }
-
-    if (startDate || endDate) {
-      ledgerQuery.date = {};
-      if (startDate) ledgerQuery.date.$gte = new Date(startDate);
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        ledgerQuery.date.$lte = end;
+      if (productId) {
+        ledgerQuery.product = productId;
       }
-    }
 
-    const parkingStockLedgers = await ParkingStockLedger.find(ledgerQuery)
-      .populate('product')
-      .populate('parkingStore', 'storeName')
-      .populate('branch', 'branch_name')
-      .populate('operator', 'fullname')
-      .sort({ createdAt: 1 });
+      if (parkingStoreId) {
+        ledgerQuery.parkingStore = parkingStoreId;
+      }
 
-    console.log("ParkingStockLedgers found:", parkingStockLedgers.length);
-    console.log(parkingStockLedgers.map(l => ({
-      stock_ID: l.stock_ID,
-      particular: l.particular,
-      date: l.date
-    })));
+      if (startDate || endDate) {
+        ledgerQuery.date = {};
+        if (startDate) ledgerQuery.date.$gte = new Date(startDate);
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          ledgerQuery.date.$lte = end;
+        }
+      }
 
-    const parkingStores = await ParkingStore.find({ branch: branchId });
-    const products = await Product.find({ branch: branchId });
+      const [parkingStockLedgers, parkingStores, products] = await Promise.all([
+        ParkingStockLedger.find(ledgerQuery)
+          .populate("product")
+          .populate("parkingStore", "storeName")
+          .populate("branch", "branch_name")
+          .populate("operator", "fullname")
+          .sort({ createdAt: 1 }),
+        ParkingStore.find({ branch: branchId }),
+        Product.find({ branch: branchId })
+      ]);
 
-    if (user.role === 'owner') {
-      const ownerBranch = await Branch.findById(branchId);
-      const allBranches = await Branch.find();
+      if (user.role?.name === "owner") {
+        const [ownerBranch, allBranches] = await Promise.all([
+          Branch.findById(branchId),
+          Branch.find()
+        ]);
 
-      return res.render('Report/Stock/parking-stock-report', {
+        return res.render("Report/Stock/parking-stock-report", {
+          user,
+          ownerBranch: { branch: ownerBranch },
+          branches: allBranches,
+          parkingStockLedgers:
+            productId || parkingStoreId ? parkingStockLedgers : undefined,
+          parkingStores,
+          products,
+          filters
+        });
+      }
+
+      res.render("Report/Stock/parking-stock-report", {
         user,
-        ownerBranch: { branch: ownerBranch },
-        branches: allBranches,
-        parkingStockLedgers: productId || parkingStoreId ? parkingStockLedgers : undefined,
+        ownerBranch: { branch: user.branch },
+        parkingStockLedgers:
+          productId || parkingStoreId ? parkingStockLedgers : undefined,
         parkingStores,
         products,
         filters
       });
+    } catch (err) {
+      console.error(err);
+      res.redirect("/error-404");
     }
-
-    res.render('Report/Stock/parking-stock-report', {
-      user,
-      ownerBranch: { branch: user.branch },
-      parkingStockLedgers: productId || parkingStoreId ? parkingStockLedgers : undefined,
-      parkingStores,
-      products,
-      filters
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.redirect('/error-404');
   }
-});
+);
 
 
-router.get('/purchase-report', async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect('/');
+router.get(
+  "/purchase-report",
+  checkPermission("purchase-report"),
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role"); // ensure role is loaded for middleware + owner checks
 
-  try {
-    const user = await User.findById(req.user._id).populate('branch');
-    if (!user) return res.redirect('/');
+      if (!user) return res.redirect("/");
 
-    const branchId = user.branch._id || user.branch;
-    const { supplierID, supplier, startDate, endDate } = req.query;
+      const branchId = user.branch._id || user.branch;
+      const { supplierID, supplier, startDate, endDate } = req.query;
 
-    let purchaseReports = []; // default empty
-    const filters = { supplier, supplierID, startDate, endDate };  // keep for form
+      let purchaseReports = []; // default empty
+      const filters = { supplier, supplierID, startDate, endDate }; // keep for form
 
-    if (startDate || endDate || supplier || supplierID) {
-      const filter = { branch: branchId };
+      if (startDate || endDate || supplier || supplierID) {
+        const filter = { branch: branchId };
 
-      if (startDate || endDate) {
-        filter.payment_date = {};
-        if (startDate) filter.payment_date.$gte = new Date(startDate);
-        if (endDate) filter.payment_date.$lte = new Date(endDate);
-      }
-
-      if (supplierID) {
-        // use exact supplier ID if provided
-        filter.supplier = supplierID;
-      } else if (supplier) {
-        // fallback: search by supplier name (correct field is 'supplier')
-        const supplierDoc = await Supplier.findOne({ supplier: { $regex: supplier, $options: 'i' } });
-        if (supplierDoc) {
-          filter.supplier = supplierDoc._id;
-        } else {
-          // supplier not found → return empty
-          return res.render('Report/Purchase/purchase-report', {
-            user,
-            purchaseReports,
-            filters,
-            ownerBranch: { branch: user.branch }
-          });
+        if (startDate || endDate) {
+          filter.payment_date = {};
+          if (startDate) filter.payment_date.$gte = new Date(startDate);
+          if (endDate) filter.payment_date.$lte = new Date(endDate);
         }
-      }
 
-      purchaseReports = await ReceivedStock.find(filter)
-        .populate('supplier')
-        .populate('items.product')
-        .sort({ payment_date: -1 });
-    }
-
-    const renderData = { user, purchaseReports, filters };
-
-    if (user.role === 'owner') {
-      const ownerBranch = await Branch.findById(branchId);
-      const allBranches = await Branch.find();
-      renderData.ownerBranch = { branch: ownerBranch };
-      renderData.branches = allBranches;
-    } else {
-      renderData.ownerBranch = { branch: user.branch };
-    }
-
-    res.render('Report/Purchase/purchase-report', renderData);
-
-  } catch (err) {
-    console.error('Error loading purchase-report:', err);
-    res.redirect('/error-404');
-  }
-});
-
-router.get('/supplier-report', async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect('/');
-
-  try {
-    const user = await User.findById(req.user._id).populate('branch');
-    if (!user) return res.redirect('/');
-
-    const branchId = user.branch._id || user.branch;
-    const { supplierID, supplier, startDate, endDate } = req.query;
-
-    let supplierReports = []; // default empty
-    const filters = { supplier, supplierID, startDate, endDate };
-
-    if (startDate || endDate || supplier || supplierID) {
-      const filter = { branch: branchId };
-
-      if (startDate || endDate) {
-        filter.date = {};
-        if (startDate) filter.date.$gte = new Date(startDate);
-        if (endDate) filter.date.$lte = new Date(endDate);
-      }
-
-      if (supplierID) {
-        filter.supplier = supplierID;
-      } else if (supplier) {
-        const supplierDoc = await Supplier.findOne({ supplier: { $regex: supplier, $options: 'i' } });
-        if (supplierDoc) {
-          filter.supplier = supplierDoc._id;
-        } else {
-          // supplier not found → return empty
-          return res.render('Report/Supplier/supplier-report', {
-            user,
-            supplierReports,
-            filters,
-            ownerBranch: { branch: user.branch }
+        if (supplierID) {
+          filter.supplier = supplierID;
+        } else if (supplier) {
+          const supplierDoc = await Supplier.findOne({
+            supplier: { $regex: supplier, $options: "i" }
           });
+          if (supplierDoc) {
+            filter.supplier = supplierDoc._id;
+          } else {
+            return res.render("Report/Purchase/purchase-report", {
+              user,
+              purchaseReports,
+              filters,
+              ownerBranch: { branch: user.branch }
+            });
+          }
         }
+
+        purchaseReports = await ReceivedStock.find(filter)
+          .populate("supplier")
+          .populate("items.product")
+          .sort({ payment_date: -1 });
       }
 
-      supplierReports = await SupplierLedger.find(filter)
-        .populate('supplier')
-        .sort({ date: 1, createdAt: 1 }); // oldest first for running balance
+      const renderData = { user, purchaseReports, filters };
+
+      if (user.role?.name === "owner") {
+        const [ownerBranch, allBranches] = await Promise.all([
+          Branch.findById(branchId),
+          Branch.find()
+        ]);
+        renderData.ownerBranch = { branch: ownerBranch };
+        renderData.branches = allBranches;
+      } else {
+        renderData.ownerBranch = { branch: user.branch };
+      }
+
+      res.render("Report/Purchase/purchase-report", renderData);
+    } catch (err) {
+      console.error("Error loading purchase-report:", err);
+      res.redirect("/error-404");
     }
-
-    const renderData = { user, supplierReports, filters };
-
-    if (user.role === 'owner') {
-      const ownerBranch = await Branch.findById(branchId);
-      const allBranches = await Branch.find();
-      renderData.ownerBranch = { branch: ownerBranch };
-      renderData.branches = allBranches;
-    } else {
-      renderData.ownerBranch = { branch: user.branch };
-    }
-
-    res.render('Report/Supplier/supplier-report', renderData);
-  } catch (err) {
-    console.error('Error loading supplier-report:', err);
-    res.redirect('/error-404');
   }
-});
+);
+
+
+router.get(
+  "/supplier-report",
+  checkPermission("supplier-report"),
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id)
+        .populate("branch")
+        .populate("role");
+
+      if (!user) return res.redirect("/");
+
+      const branchId = user.branch._id || user.branch;
+      const { supplierID, supplier, startDate, endDate } = req.query;
+
+      let supplierReports = [];
+      const filters = { supplier, supplierID, startDate, endDate };
+
+      if (startDate || endDate || supplier || supplierID) {
+        const filter = { branch: branchId };
+
+        if (startDate || endDate) {
+          filter.date = {};
+          if (startDate) filter.date.$gte = new Date(startDate);
+          if (endDate) filter.date.$lte = new Date(endDate);
+        }
+
+        if (supplierID) {
+          filter.supplier = supplierID;
+        } else if (supplier) {
+          const supplierDoc = await Supplier.findOne({
+            supplier: { $regex: supplier, $options: "i" }
+          });
+          if (supplierDoc) {
+            filter.supplier = supplierDoc._id;
+          } else {
+            // supplier not found → return empty
+            return res.render("Report/Supplier/supplier-report", {
+              user,
+              supplierReports,
+              filters,
+              ownerBranch: { branch: user.branch }
+            });
+          }
+        }
+
+        supplierReports = await SupplierLedger.find(filter)
+          .populate("supplier")
+          .sort({ date: 1, createdAt: 1 });
+      }
+
+      const renderData = { user, supplierReports, filters };
+
+      if (user.role?.name === "owner") {
+        const [ownerBranch, allBranches] = await Promise.all([
+          Branch.findById(branchId),
+          Branch.find()
+        ]);
+        renderData.ownerBranch = { branch: ownerBranch };
+        renderData.branches = allBranches;
+      } else {
+        renderData.ownerBranch = { branch: user.branch };
+      }
+
+      res.render("Report/Supplier/supplier-report", renderData);
+    } catch (err) {
+      console.error("Error loading supplier-report:", err);
+      res.redirect("/error-404");
+    }
+  }
+);
 
 
 
@@ -5191,6 +5556,156 @@ router.post('/delete-log', async (req, res, next) => {
     next(err);
   }
 });
+
+router.get("/role-permissions", (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  const selectedBranchId = req.query.branchId;
+
+  User.findById(req.user._id)
+    .populate("branch role") // populate both branch & role
+    .then(user => {
+      if (!user) return res.redirect("/");
+
+      const renderRolePermissionsPage = (branchList, ownerBranch, selectedBranchIdToUse) => {
+        Role.find()
+          .then(roles => {
+            res.render("Role/role-permissions", {
+              user,
+              ownerBranch: { branch: ownerBranch },
+              branches: branchList,
+              selectedBranchId: selectedBranchIdToUse,
+              roles
+            });
+          })
+          .catch(err => {
+            console.error("Error fetching roles:", err);
+            res.redirect("/error-404");
+          });
+      };
+
+      if (user.role.name === 'owner') {
+        Branch.find()
+          .then(allBranches => {
+            const branchToUse = selectedBranchId || user.branch._id;
+
+            // Find the actual selected branch document
+            const selectedBranchDoc = allBranches.find(b => b._id.equals(branchToUse));
+
+            renderRolePermissionsPage(allBranches, selectedBranchDoc, branchToUse);
+          })
+          .catch(err => {
+            console.error(err);
+            res.redirect("/error-404");
+          });
+      } else {
+        // Staff/Admin: only own branch
+        renderRolePermissionsPage([user.branch], user.branch, user.branch._id);
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      res.redirect("/error-404");
+    });
+});
+
+// Create role
+router.post("/create-roles", async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || name.trim() === "") {
+      req.flash("error", "Role name is required");
+      return res.redirect("back");
+    }
+
+    const roleExists = await Role.findOne({ name: name.trim() });
+    if (roleExists) {
+      return res.redirect("back");
+    }
+
+    await Role.create({
+      name: name.trim(),
+      permissions: []
+    });
+
+    res.redirect("/role-permissions");
+  } catch (err) {
+    console.error(err);
+    res.redirect("/role-permissions");
+  }
+});
+
+
+
+
+router.get("/permissions/:roleId", async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  const selectedBranchId = req.query.branchId;
+  const roleId = req.params.roleId; // ✅ role ID from URL
+
+  try {
+    const user = await User.findById(req.user._id).populate("branch role");
+    if (!user) return res.redirect("/");
+
+    // ✅ Fetch the role to edit
+    const targetRole = await Role.findById(roleId);
+    if (!targetRole) return res.redirect("/error-404");
+
+    const allPermissions = await Permission.find().sort({ module: 1, name: 1 });
+
+    const renderPermissionsPage = (branchList, ownerBranch, selectedBranchIdToUse) => {
+      res.render("Role/permissions", {
+        user,
+        role: targetRole, // 👈 pass the role being edited
+        ownerBranch: { branch: ownerBranch },
+        branches: branchList,
+        selectedBranchId: selectedBranchIdToUse,
+        permissions: allPermissions,
+      });
+    };
+
+    if (user.role.name === "owner") {
+      const allBranches = await Branch.find();
+      const branchToUse = selectedBranchId || user.branch._id;
+      const selectedBranchDoc = allBranches.find((b) => b._id.equals(branchToUse));
+      renderPermissionsPage(allBranches, selectedBranchDoc, branchToUse);
+    } else {
+      renderPermissionsPage([user.branch], user.branch, user.branch._id);
+    }
+  } catch (err) {
+    console.error(err);
+    res.redirect("/error-404");
+  }
+});
+
+router.post("/roles/:roleId/permissions", async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/");
+
+  try {
+    const roleId = req.params.roleId;
+
+    // Get permissions from form (will be an array or undefined)
+    let permissions = req.body.permissions || [];
+
+    // Ensure permissions is always an array
+    if (!Array.isArray(permissions)) {
+      permissions = [permissions];
+    }
+
+    // Update the role in DB
+    await Role.findByIdAndUpdate(roleId, { permissions });
+
+    req.flash("success", "Permissions updated successfully.");
+    res.redirect(`/permissions/${roleId}`); // redirect back to permissions page
+  } catch (err) {
+    console.error("Error updating role permissions:", err);
+    req.flash("error", "Failed to update permissions.");
+    res.redirect("/error-404");
+  }
+});
+
 
 
 module.exports = router;

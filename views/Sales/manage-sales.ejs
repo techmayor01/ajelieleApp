@@ -125,7 +125,7 @@
 					</div>
 					<div class="card-body p-0">
 						<div class="table-responsive">
-							<table class="table datatable">
+							<table class="table ">
 								<thead class="thead-light">
 									<tr>
 										<th>Customer</th>
@@ -148,9 +148,9 @@
         </a>
       </td>
       <td><%= invoice.receipt_no %></td>
-      <td>
-        <%= invoice.payment_date ? new Date(invoice.payment_date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '' %>
-      </td>
+		<td data-created="<%= invoice.createdAt %>">
+		<%= invoice.payment_date ? new Date(invoice.payment_date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '' %>
+		</td>
       <td>₦<%= invoice.grand_total?.toFixed(2) %></td>
       <td>₦<%= invoice.paid_amount?.toFixed(2) %></td>
       <td>₦<%= invoice.remaining_amount?.toFixed(2) %></td>
@@ -165,16 +165,21 @@
           <i class="fa fa-ellipsis-v" aria-hidden="true"></i>
         </a>
         <ul class="dropdown-menu">
-          <li>
-			<a href="/update-invoice/<%= invoice._id %>" class="dropdown-item edit-sale-btn" >
-				<i data-feather="edit" class="info-img"></i>Edit Sale
-			</a>		  
-		</li>
-          <li>
-            <a href="#" data-bs-toggle="modal" data-bs-target="#delete"  class="dropdown-item mb-0">
-              <i data-feather="trash-2" class="info-img"></i>Delete Sale
-            </a>
-          </li>
+			<li>
+				<a href="/update-invoice/<%= invoice._id %>" class="dropdown-item edit-sale-btn" >
+					<i data-feather="edit" class="info-img"></i>Edit Sale
+				</a>		  
+			</li>
+			<li>
+				<a href="#" data-bs-toggle="modal" data-bs-target="#delete"  class="dropdown-item mb-0">
+				<i data-feather="trash-2" class="info-img"></i>Delete Sale
+				</a>
+			</li>
+			<li>
+				<a class="dropdown-item" href="/receipt/<%= invoice._id %>">
+					<i data-feather="printer" class="feather-printer"></i> Print Receipt
+				</a>
+			</li>
         </ul>
       </td>
     </tr>
@@ -433,7 +438,12 @@
 	});
 	</script>
 
+<script>
+	$('.datatable').DataTable({
+  ordering: false
+});
 
+</script>
 	<!-- jQuery -->
 	<script data-cfasync="false" src="../../cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="assets/js/jquery-3.7.1.min.js" type="b3eeb33e1d86f4025010ad76-text/javascript"></script>
 

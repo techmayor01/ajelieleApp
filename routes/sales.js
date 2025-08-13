@@ -16,6 +16,7 @@ const Transaction = require('../model/Transaction');
 const Config = require('../model/NegSales');
 const Product = require("../model/Product");
 const StockLedger = require("../model/StockLedger");
+const checkPermission = require("../Utils/checkPermission");
 
 
 
@@ -68,11 +69,19 @@ router.post("/addinvoice", async (req, res, next) => {
 
     if (sales_type === 'credit') {
       const newDebt = (customer.remaining_amount || 0) + remainingAmount;
+
+      // ✅ Check before allowing sale
       if (customer.credit_limit && newDebt > customer.credit_limit) {
         throw {
           status: 400,
           message: `Credit limit exceeded! Available: ₦${(customer.credit_limit - (customer.remaining_amount || 0)).toLocaleString()}`
         };
+      }
+
+      // ✅ Deduct from credit limit immediately after approval
+      if (customer.credit_limit) {
+        customer.credit_limit = roundToTwo(customer.credit_limit - grandTotalNum);
+        if (customer.credit_limit < 0) customer.credit_limit = 0; // no negatives
       }
     }
 
@@ -184,41 +193,43 @@ router.post("/addinvoice", async (req, res, next) => {
     });
 
     // 🧾 Get last balance from ledger
-const previousLedger = await CustomerLedger.find({ customer: customer._id }).sort({ createdAt: -1 }).limit(1);
-const lastLedgerBalance = previousLedger.length > 0 ? previousLedger[0].Balance : 0;
+    const previousLedger = await CustomerLedger.find({ customer: customer._id })
+      .sort({ createdAt: -1 })
+      .limit(1);
 
-let newLedgerBalance = lastLedgerBalance;
+    const lastLedgerBalance = previousLedger.length > 0 ? previousLedger[0].Balance : 0;
+    let newLedgerBalance = lastLedgerBalance;
 
-if (sales_type === 'credit') {
-  newLedgerBalance = roundToTwo(lastLedgerBalance - grandTotalNum);
+    if (sales_type === 'credit') {
+      newLedgerBalance = roundToTwo(lastLedgerBalance - grandTotalNum);
 
-  await CustomerLedger.create({
-    customer: customer._id,
-    branch: branchId,
-    type: 'credit-sales',
-    refNo: receipt_no,
-    date: payment_date,
-    amount: grandTotalNum,
-    paid: 0,
-    Balance: newLedgerBalance
-  });
+      await CustomerLedger.create({
+        customer: customer._id,
+        branch: branchId,
+        type: 'credit-sales',
+        refNo: receipt_no,
+        date: payment_date,
+        amount: grandTotalNum,
+        paid: 0,
+        Balance: newLedgerBalance,
+        credit_limit: customer.credit_limit // ✅ track available credit after sale
+      });
 
-  customer.remaining_amount = newLedgerBalance;
-  customer.total_debt = newLedgerBalance;
+      customer.remaining_amount = newLedgerBalance;
+      customer.total_debt = newLedgerBalance;
 
-} else {
-  await CustomerLedger.create({
-    customer: customer._id,
-    branch: branchId,
-    type: 'paid-sales',
-    refNo: receipt_no,
-    date: payment_date,
-    amount: grandTotalNum,
-    paid: 0,
-    Balance: lastLedgerBalance
-  });
-}
-
+    } else {
+      await CustomerLedger.create({
+        customer: customer._id,
+        branch: branchId,
+        type: 'paid-sales',
+        refNo: receipt_no,
+        date: payment_date,
+        amount: grandTotalNum,
+        paid: 0,
+        Balance: lastLedgerBalance
+      });
+    }
 
     customer.sales_amount = roundToTwo((customer.sales_amount || 0) + grandTotalNum);
     customer.order_count = (customer.order_count || 0) + 1;
@@ -247,7 +258,7 @@ if (sales_type === 'credit') {
 
 
 // HANDLING PAYMENT TRANSACTIONS HERE ----------------- TECH MAYOR GROUPS 
-router.post("/transactions", async (req, res, next) => {
+router.post("/transactions", checkPermission("modify-payments"), async (req, res, next) => {
   try {
     const {
       selectedUserId,
@@ -306,7 +317,7 @@ router.post("/transactions", async (req, res, next) => {
       });
 
       // === Save to Transaction collection ===
-      await Transaction.create({
+      const transaction = await Transaction.create({
         transactionType: "Customer",
         branch: customer.branch._id,
         userId: customer._id,
@@ -320,28 +331,29 @@ router.post("/transactions", async (req, res, next) => {
         createdBy: req.user._id // Ensure user is authenticated
       });
 
-      return res.redirect("/transactions?success=1");
+      // Redirect straight to cash receipt print page
+      return res.redirect(`/cash-receipt/${transaction._id}`);
+
     }
 
     if (selectedUserType === "loan") {
       // Add similar logic here to handle loan ledger & balance if applicable
+      const transaction = await Transaction.create({
+      transactionType: "Loan",
+      branch: req.user.branch, // adjust if needed
+      userId: selectedUserId,
+      expectedAmount: 0, // Fill with actual logic
+      amountReceived: paidAmount,
+      balanceRemaining: 0, // Fill with actual logic
+      paymentDate,
+      paymentType,
+      receiptNo: `LN-${Date.now()}`,
+      reference: `Loan repayment`,
+      createdBy: req.user._id
+    });
 
-      // Placeholder for now:
-      await Transaction.create({
-        transactionType: "Loan",
-        branch: req.user.branch, // adjust if needed
-        userId: selectedUserId,
-        expectedAmount: 0, // Fill with actual logic
-        amountReceived: paidAmount,
-        balanceRemaining: 0, // Fill with actual logic
-        paymentDate,
-        paymentType,
-        receiptNo: `LN-${Date.now()}`,
-        reference: `Loan repayment`,
-        createdBy: req.user._id
-      });
+    return res.redirect(`/cash-receipt/${transaction._id}`);
 
-      return res.redirect("/transactions");
     }
 
     res.status(400).json({ error: "Unsupported transaction type" });
@@ -413,7 +425,7 @@ router.post('/editPayment', async (req, res) => {
     transaction.paymentDate = paymentDate;
     await transaction.save();
 
-    return res.redirect('/transactions');
+    return res.redirect(`/cash-receipt/${transaction._id}`);
   } catch (err) {
     console.error('Edit Payment Error:', err);
     return res.status(500).json({ error: 'Internal Server Error' });

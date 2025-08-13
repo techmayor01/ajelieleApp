@@ -166,23 +166,6 @@
 							</a>
 						</li>
 	
-						<!-- Flag -->
-						<li class="nav-item dropdown has-arrow flag-nav nav-item-box">
-							<a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="javascript:void(0);"
-								role="button">
-								<img src="assets/img/flags/us-flag.svg" alt="Language" class="img-fluid">
-							</a>
-							<div class="dropdown-menu dropdown-menu-right">
-								<a href="javascript:void(0);" class="dropdown-item">
-									<img src="assets/img/flags/english.svg" alt="Img" height="16">English
-								</a>
-								<a href="javascript:void(0);" class="dropdown-item">
-									<img src="assets/img/flags/arabic.svg" alt="Img" height="16">Arabic
-								</a>
-							</div>
-						</li>
-						<!-- /Flag -->
-	
 						<li class="nav-item nav-item-box">
 							<a href="javascript:void(0);" id="btnFullscreen">
 								<i class="ti ti-maximize"></i>
@@ -262,31 +245,46 @@
 							</div>
 						</li>
 						<!-- /Notifications -->
-	
-					
+		
+						<style>
+							.avatar-initials {
+								width: 30px;
+								height: 31px;
+								background-color: #1b2850;
+								color: #fff;
+								font-weight: bold;
+								font-size: 12px;
+								}
+
+						</style>
 						<li class="nav-item dropdown has-arrow main-drop profile-nav">
-							<a href="javascript:void(0);" class="nav-link userset" data-bs-toggle="dropdown">
-								<span class="user-info p-0">
-									<span class="user-letter">
-										<img src="assets/img/profiles/avator1.jpg" alt="Img" class="img-fluid">
-									</span>
+						<a href="javascript:void(0);" class="nav-link userset" data-bs-toggle="dropdown">
+							<span class="user-info p-0">
+							<span class="user-letter">
+								<span class="avatar-initials text-uppercase d-flex align-items-center justify-content-center rounded-circle">
+								<%= user.fullname.slice(0, 2) %>
 								</span>
-							</a>
-							<div class="dropdown-menu menu-drop-user">
-								<div class="profileset d-flex align-items-center">
-									<span class="user-img me-2">
-										<img src="assets/img/profiles/avator1.jpg" alt="Img">
-									</span>
-									<div>
-										<h6 class="fw-medium">John Smilga</h6>
-										<p>Admin</p>
-									</div>
-								</div>
-								<a class="dropdown-item" href="profile.html"><i class="ti ti-user-circle me-2"></i>MyProfile</a>
-								<hr class="my-2">
-								<a class="dropdown-item logout pb-0" href="signin.html"><i class="ti ti-logout me-2"></i>Logout</a>
+							</span>
+							</span>
+						</a>
+						<div class="dropdown-menu menu-drop-user">
+							<div class="profileset d-flex align-items-center">
+							<span class="user-img me-2">
+								<span class="avatar-initials text-uppercase d-flex align-items-center justify-content-center rounded-circle">
+								<%= user.fullname.slice(0, 2) %>
+								</span>
+							</span>
+							<div>
+								<h6 class="fw-medium"><%= user.fullname %></h6>
+								<p><%= user.role.name %></p>
 							</div>
+							</div>
+							<a class="dropdown-item" href="/user-profile"><i class="ti ti-user-circle me-2"></i>MyProfile</a>
+							<hr class="my-2">
+							<a class="dropdown-item logout pb-0" href="/logout"><i class="ti ti-logout me-2"></i>Logout</a>
+						</div>
 						</li>
+
 					</ul>
 					<!-- /Header Menu -->
 	
@@ -295,9 +293,8 @@
 						<a href="javascript:void(0);" class="nav-link dropdown-toggle" data-bs-toggle="dropdown"
 							aria-expanded="false"><i class="fa fa-ellipsis-v"></i></a>
 						<div class="dropdown-menu dropdown-menu-right">
-							<a class="dropdown-item" href="profile.html">My Profile</a>
-							<a class="dropdown-item" href="general-settings.html">Settings</a>
-							<a class="dropdown-item" href="signin.html">Logout</a>
+							<a class="dropdown-item" href="/user-profile">My Profile</a>
+							<a class="dropdown-item" href="/logout">Logout</a>
 						</div>
 					</div>
 					<!-- /Mobile Menu -->
@@ -511,24 +508,24 @@
 									<li>
 										<a href="/customer-report"><i class="ti ti-report fs-16 me-2"></i><span>Customer Report</span></a>
 									</li>
-									<li><a href="expense-report.html"><i class="ti ti-file-vector fs-16 me-2"></i><span>Expense Report</span></a></li>
+									<li><a href="/expense-report"><i class="ti ti-file-vector fs-16 me-2"></i><span>Expense Report</span></a></li>
 									<li><a href="profit-and-loss.html"><i class="ti ti-chart-donut fs-16 me-2"></i><span>Profit & Loss</span></a></li>
 								</ul>
 							</li>
 							<li class="submenu-open">
 								<h6 class="submenu-hdr">User Management</h6>
 								<ul>
-									<li><a href="users.html"><i class="ti ti-shield-up fs-16 me-2"></i><span>Users</span></a></li>
-									<li><a href="roles-permissions.html"><i class="ti ti-jump-rope fs-16 me-2"></i><span>Roles & Permissions</span></a></li>
-									<li><a href="delete-account.html"><i class="ti ti-trash-x fs-16 me-2"></i><span>Delete Account Request</span></a></li>
+									<li><a href="/users"><i class="ti ti-shield-up fs-16 me-2"></i><span>Users</span></a></li>
+									<li><a href="/role-permissions"><i class="ti ti-jump-rope fs-16 me-2"></i><span>Roles & Permissions</span></a></li>
+									<li><a href="/staffLogs"><i class="ti ti-file-search fs-16 me-2"></i><span>Staff Logs</span></a></li>
 								</ul>
 							</li>
 							<li class="submenu-open">
 								<h6 class="submenu-hdr">Profile</h6>
 								<ul>
-									<li><a href="profile.html"><i class="ti ti-user-circle fs-16 me-2"></i><span>Profile</span></a></li>
+									<li><a href="/user-profile"><i class="ti ti-user-circle fs-16 me-2"></i><span>Profile</span></a></li>
 									<li>
-										<a href="signin.html"><i class="ti ti-logout fs-16 me-2"></i><span>Logout</span> </a>
+										<a href="/logout"><i class="ti ti-logout fs-16 me-2"></i><span>Logout</span> </a>
 									</li>
 								</ul>
 							</li>

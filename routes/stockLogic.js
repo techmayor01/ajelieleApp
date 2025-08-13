@@ -8,6 +8,7 @@ const ParkingStock = require("../model/ParkingStock");
 const Product = require("../model/Product");
 const StockLedger = require("../model/StockLedger");
 const ParkingStockLedger = require("../model/ParkingStockLedger");
+const checkPermission = require("../Utils/checkPermission");
 
 router.post('/addParkingStock', async (req, res) => {
   const {

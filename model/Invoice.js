@@ -70,23 +70,19 @@ const invoiceSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  paymentRef: {
-    type: String
-  },
+  paymentRef: String,
   branch: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Branch',
     required: true
   },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
-  },
+  }
+}, {
+  timestamps: true
 });
 
 module.exports = mongoose.model('Invoice', invoiceSchema);
