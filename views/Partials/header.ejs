@@ -32,31 +32,35 @@
 						<!-- /Search -->
 	
 						<!-- Select Store -->
-						<li class="nav-item dropdown has-arrow main-drop select-store-dropdown">
-							 <div class="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
-						<div class="dropdown">
-							<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
-							Switch Branch
-							</a>
-							<ul class="dropdown-menu dropdown-menu-end p-3">
-							<% branches.forEach(branch => { %>
-								<li>
-								<a 
-									href="?branchId=<%= branch._id %> %>" 
-									class="dropdown-item rounded-1">
-									<%= branch.branch_name %>
+						 
+						<% if (user.role?.name === "owner") { %>
+							<li class="nav-item dropdown has-arrow main-drop select-store-dropdown">
+							<div class="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
+								<div class="dropdown">
+								<a href="javascript:void(0);" class="dropdown-toggle btn btn-white btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
+									Switch Branch
 								</a>
-								</li>
-							<% }) %>
-							</ul>
-						</div>
-					  </div>
-						</li>
+								<ul class="dropdown-menu dropdown-menu-end p-3">
+									<% branches.forEach(branch => { %>
+									<li>
+										<a 
+										href="?branchId=<%= branch._id %>" 
+										class="dropdown-item rounded-1">
+										<%= branch.branch_name %>
+										</a>
+									</li>
+									<% }) %>
+								</ul>
+								</div>
+							</div>
+							</li>
+						<% } %>
+
 						<!-- /Select Store -->
 	
 						<li class="nav-item dropdown link-nav">
 							<a href="javascript:void(0);" class="btn btn-primary btn-md d-inline-flex align-items-center" data-bs-toggle="dropdown">
-								<i class="ti ti-circle-plus me-1"></i>Add New
+								<i class="ti ti-circle-plus me-1"></i>Short Cut
 							</a>
 							<div class="dropdown-menu dropdown-xl dropdown-menu-center">
 								<div class="row g-2">
@@ -69,7 +73,7 @@
 										</a>
 									</div>
 									<div class="col-md-2">
-										<a href="add-product.html" class="link-item">
+										<a href="/manageProduct" class="link-item">
 											<span class="link-icon">
 												<i class="ti ti-square-plus"></i>
 											</span>
@@ -77,7 +81,7 @@
 										</a>
 									</div>
 									<div class="col-md-2">
-										<a href="category-list.html" class="link-item">
+										<a href="/purchase-stock" class="link-item">
 											<span class="link-icon">
 												<i class="ti ti-shopping-bag"></i>
 											</span>
@@ -85,7 +89,7 @@
 										</a>
 									</div>
 									<div class="col-md-2">
-										<a href="online-orders.html" class="link-item">
+										<a href="/createSales" class="link-item">
 											<span class="link-icon">
 												<i class="ti ti-shopping-cart"></i>
 											</span>
@@ -93,7 +97,7 @@
 										</a>
 									</div>
 									<div class="col-md-2">
-										<a href="expense-list.html" class="link-item">
+										<a href="/expense" class="link-item">
 											<span class="link-icon">
 												<i class="ti ti-file-text"></i>
 											</span>
@@ -101,7 +105,7 @@
 										</a>
 									</div>
 									<div class="col-md-2">
-										<a href="quotation-list.html" class="link-item">
+										<a href="/manageParkingStore" class="link-item">
 											<span class="link-icon">
 												<i class="ti ti-device-floppy"></i>
 											</span>
@@ -109,7 +113,7 @@
 										</a>
 									</div>
 									<div class="col-md-2">
-										<a href="sales-returns.html" class="link-item">
+										<a href="/manageLoan" class="link-item">
 											<span class="link-icon">
 												<i class="ti ti-copy"></i>
 											</span>
@@ -117,7 +121,7 @@
 										</a>
 									</div>
 									<div class="col-md-2">
-										<a href="users.html" class="link-item">
+										<a href="/users" class="link-item">
 											<span class="link-icon">
 												<i class="ti ti-user"></i>
 											</span>
@@ -133,15 +137,15 @@
 										</a>
 									</div>
 									<div class="col-md-2">
-										<a href="sales-report.html" class="link-item">
+										<a href="/loan" class="link-item">
 											<span class="link-icon">
 												<i class="ti ti-shield"></i>
 											</span>
-											<p>Biller</p>
+											<p>Loaner</p>
 										</a>
 									</div>
 									<div class="col-md-2">
-										<a href="suppliers.html" class="link-item">
+										<a href="/supplier" class="link-item">
 											<span class="link-icon">
 												<i class="ti ti-user-check"></i>
 											</span>
@@ -149,7 +153,7 @@
 										</a>
 									</div>
 									<div class="col-md-2">
-										<a href="stock-transfer.html" class="link-item">
+										<a href="/stockTransfer" class="link-item">
 											<span class="link-icon">
 												<i class="ti ti-truck"></i>
 											</span>
@@ -192,45 +196,6 @@
 													</span>
 													<div class="flex-grow-1">
 														<p class="noti-details"><span class="noti-title">James Kirwin</span> confirmed his order.  Order No: #78901.Estimated delivery: 2 days</p>
-														<p class="noti-time">4 mins ago</p>
-													</div>
-												</div>
-											</a>
-										</li>
-										<li class="notification-message">
-											<a href="activities.html">
-												<div class="media d-flex">
-													<span class="avatar flex-shrink-0">
-														<img alt="Img" src="assets/img/profiles/avatar-03.jpg">
-													</span>
-													<div class="flex-grow-1">
-														<p class="noti-details"><span class="noti-title">Leo Kelly</span> cancelled his order scheduled for  17 Jan 2025</p>
-														<p class="noti-time">10 mins ago</p>
-													</div>
-												</div>
-											</a>
-										</li>
-										<li class="notification-message">
-											<a href="activities.html" class="recent-msg">
-												<div class="media d-flex">
-													<span class="avatar flex-shrink-0">
-														<img alt="Img" src="assets/img/profiles/avatar-17.jpg">
-													</span>
-													<div class="flex-grow-1">
-														<p class="noti-details">Payment of $50 received for Order #67890 from <span class="noti-title">Antonio Engle</span></p>
-														<p class="noti-time">05 mins ago</p>
-													</div>
-												</div>
-											</a>
-										</li>
-										<li class="notification-message">
-											<a href="activities.html" class="recent-msg">
-												<div class="media d-flex">
-													<span class="avatar flex-shrink-0">
-														<img alt="Img" src="assets/img/profiles/avatar-02.jpg">
-													</span>
-													<div class="flex-grow-1">
-														<p class="noti-details"><span class="noti-title">Andrea</span> confirmed his order.  Order No: #73401.Estimated delivery: 3 days</p>
 														<p class="noti-time">4 mins ago</p>
 													</div>
 												</div>
@@ -314,61 +279,7 @@
 					</a>
 				</div>
 				<!-- /Logo -->
-				<div class="modern-profile p-3 pb-0">
-					<div class="text-center rounded bg-light p-3 mb-4 user-profile">
-						<div class="avatar avatar-lg online mb-3">
-							<img src="assets/img/customer/customer15.jpg" alt="Img" class="img-fluid rounded-circle">
-						</div>
-						<h6 class="fs-14 fw-bold mb-1">Adrian Herman</h6>
-						<p class="fs-12 mb-0">System Admin</p>
-					</div>
-					<div class="sidebar-nav mb-3">
-						<ul class="nav nav-tabs nav-tabs-solid nav-tabs-rounded nav-justified bg-transparent" role="tablist">
-							<li class="nav-item"><a class="nav-link active border-0" href="#">Menu</a></li>
-							<li class="nav-item"><a class="nav-link border-0" href="chat.html">Chats</a></li>
-							<li class="nav-item"><a class="nav-link border-0" href="email.html">Inbox</a></li>
-						</ul>
-					</div>
-				</div>
-				<div class="sidebar-header p-3 pb-0 pt-2">
-					<div class="text-center rounded bg-light p-2 mb-4 sidebar-profile d-flex align-items-center">
-						<div class="avatar avatar-md onlin">
-							<img src="assets/img/customer/customer15.jpg" alt="Img" class="img-fluid rounded-circle">
-						</div>
-						<div class="text-start sidebar-profile-info ms-2">
-							<h6 class="fs-14 fw-bold mb-1">Adrian Herman</h6>
-							<p class="fs-12">System Admin</p>
-						</div>
-					</div>
-					<div class="d-flex align-items-center justify-content-between menu-item mb-3">
-						<div>
-							<a href="index.html" class="btn btn-sm btn-icon bg-light">
-								<i class="ti ti-layout-grid-remove"></i>
-							</a>
-						</div>
-						<div>
-							<a href="chat.html" class="btn btn-sm btn-icon bg-light">
-								<i class="ti ti-brand-hipchat"></i>
-							</a>
-						</div>
-						<div>
-							<a href="email.html" class="btn btn-sm btn-icon bg-light position-relative">
-								<i class="ti ti-message"></i>
-							</a>
-						</div>
-						<div class="notification-item">
-							<a href="activities.html" class="btn btn-sm btn-icon bg-light position-relative">
-								<i class="ti ti-bell"></i>
-								<span class="notification-status-dot"></span>
-							</a>
-						</div>
-						<div class="me-0">
-							<a href="general-settings.html" class="btn btn-sm btn-icon bg-light">
-								<i class="ti ti-settings"></i>
-							</a>
-						</div>
-					</div>
-				</div>
+
 				<div class="sidebar-inner slimscroll">
 					<div id="sidebar-menu" class="sidebar-menu">
 						<ul>
@@ -518,6 +429,7 @@
 									<li><a href="/users"><i class="ti ti-shield-up fs-16 me-2"></i><span>Users</span></a></li>
 									<li><a href="/role-permissions"><i class="ti ti-jump-rope fs-16 me-2"></i><span>Roles & Permissions</span></a></li>
 									<li><a href="/staffLogs"><i class="ti ti-file-search fs-16 me-2"></i><span>Staff Logs</span></a></li>
+									<li><a href="/close-account"><i class="ti ti-exchange fs-16 me-2"></i><span>Close Account</span></a></li>
 								</ul>
 							</li>
 							<li class="submenu-open">
@@ -534,7 +446,7 @@
 								<h6 class="submenu-hdr">Logs</h6>
 								<ul>
 									<li><a href="/view-log"><i class="ti ti-file-text fs-16 me-2"></i><span>View Logs</span></a></li>								
-									<li><a href="/view-log"><i class="ti ti-file-text fs-16 me-2"></i><span>Backup</span></a></li>								
+									<li><a href="/backup"><i class="ti ti-file-text fs-16 me-2"></i><span>Backup</span></a></li>								
 								</ul>
 							</li>
 						</ul>

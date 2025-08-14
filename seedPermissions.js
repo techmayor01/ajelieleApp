@@ -25,6 +25,7 @@ const permissions = [
 
   // Expired Products
   { module: "Expired Products", name: "view-expired-products" },
+  { module: "Expired Products", name: "edit-expired-products" },
 
   // Low Stocks
   { module: "Low Stocks", name: "view-low-stocks" },

@@ -135,7 +135,7 @@
 										<th>Paid</th>
 										<th>Due</th>
 										<th>Payment Ref</th>
-										<th>Biller</th>
+										<th>Operator</th>
 										<th></th>
 									</tr>
 								</thead>
@@ -158,7 +158,7 @@
 		<%= invoice.paymentRef || 'N/A' %>
       </td>
       <td>
-        <%= invoice.createdBy.role || 'N/A' %>
+        <%= invoice.createdBy.role.name || 'N/A' %>
       </td>
       <td class="text-center">
         <a class="action-set" href="javascript:void(0);" data-bs-toggle="dropdown" aria-expanded="true">

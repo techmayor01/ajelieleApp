@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"branch":{"$numberInt":"1"},"storeName":{"$numberInt":"1"}},"name":"branch_1_storeName_1","background":true,"unique":true}],"uuid":"312b6fb1ff62488788e3b59186f0362b","collectionName":"parkingstores","type":"collection"}

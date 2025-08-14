@@ -50,7 +50,6 @@ router.get('/search-product', async (req, res) => {
   const query = req.query.q;
   if (!query) return res.json([]);
 
-  // Assuming req.user.branch contains the current logged-in branch ID
   const branchId = req.user.branch; 
 
   if (!branchId) {
@@ -59,7 +58,8 @@ router.get('/search-product', async (req, res) => {
 
   try {
     const products = await Product.find({
-      branch: branchId,                   // Filter by branch
+      branch: branchId,
+      status: 'active',
       product: { $regex: query, $options: "i" }
     }).limit(10);
 
@@ -261,6 +261,7 @@ router.get('/search-products', async (req, res) => {
   try {
     const products = await Product.find({
       branch: branchId,
+      status: 'active', 
       product: { $regex: new RegExp(query, 'i') }  // this will match anywhere, case-insensitive
     }).limit(10);
 

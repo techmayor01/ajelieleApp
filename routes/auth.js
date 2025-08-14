@@ -70,20 +70,38 @@ router.get("/register", async (req, res) => {
 });
 
 
-router.get('/logout', (req, res, next) => {
-  const staffLogId = req.session.staffLogId;
-  if (staffLogId) {
-    StaffLog.findByIdAndUpdate(staffLogId, { signOutTime: new Date() })
-      .catch(err => console.error('Error logging sign-out time:', err));
-  }
+router.get('/logout', async (req, res, next) => {
+  try {
+    const staffLogId = req.session.staffLogId;
 
-  req.logout(err => {
-    if (err) return next(err);
-    req.session.destroy(() => {
-      res.redirect('/');
+    if (staffLogId) {
+      const log = await StaffLog.findByIdAndUpdate(
+        staffLogId,
+        { 
+          signOutTime: new Date(),
+          status: "Closed"
+        },
+        { new: true }
+      );
+
+      if (!log) {
+        console.warn(`Staff log not found for ID: ${staffLogId}`);
+      }
+    }
+
+    req.logout(err => {
+      if (err) return next(err);
+      req.session.destroy(() => {
+        res.redirect('/');
+      });
     });
-  });
+  } catch (err) {
+    console.error('Error during logout:', err);
+    res.redirect('/');
+  }
 });
+
+
 
 
 router.get("/users", (req, res) => {
@@ -392,22 +410,21 @@ router.post("/sign-in", function (req, res, next) {
       if (err) return next(err);
 
       try {
-        // ✅ Generate notifications for the logged-in user
         const populatedUser = await User.findById(user._id).populate("branch");
         await checkAndCreateNotifications(populatedUser);
 
-        // ✅ Log staff activity
         const log = await StaffLog.create({
           user: user._id,
-          role: user.role,
-          signInTime: new Date()
+          branch: populatedUser.branch._id,
+          signInTime: new Date(),
+          status: "Active"
         });
 
         req.session.staffLogId = log._id;
         return res.redirect("/dashboard");
       } catch (err) {
         console.error("Login flow error:", err);
-        return res.redirect("/dashboard"); // still proceed
+        return res.redirect("/dashboard");
       }
     });
   })(req, res, next);
@@ -423,47 +440,68 @@ router.get(
         .populate("branch")
         .populate("role");
 
-      if (!user || user.role?.name !== "owner") {
+      if (!user || user.role?.name.toLowerCase() !== "owner") {
         return res.status(403).send("Access denied");
       }
 
-      // Use user's branch id if no branch query param is specified
-      const branchId = req.query.branch || (user.branch?._id || user.branch);
+      // Use branch from query if provided, else default to user's branch
+      const selectedBranchId = req.query.branchId || (user.branch?._id || user.branch);
 
-      // Base query without branch filter
-      let logsQuery = StaffLog.find()
+      // Build query
+      let query = { branch: selectedBranchId };
+
+      // Status filter
+      if (req.query.status && ["Active", "Closed"].includes(req.query.status)) {
+        query.status = req.query.status;
+      }
+
+      // Date filter
+      let startDate, endDate;
+      if (req.query.startDate && req.query.endDate) {
+        startDate = new Date(req.query.startDate);
+        endDate = new Date(req.query.endDate);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        startDate = new Date();
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date();
+        endDate.setHours(23, 59, 59, 999);
+      }
+      query.createdAt = { $gte: startDate, $lte: endDate };
+
+      // Fetch logs
+      const logs = await StaffLog.find(query)
         .populate({
           path: "user",
           select: "fullname username role branch",
-          populate: { path: "role", select: "name" }
+          populate: { path: "role", select: "name" },
         })
+        .populate("branch")
         .sort({ signInTime: -1 });
 
-      // Apply branch filter if specified
-      if (branchId && branchId !== "") {
-        logsQuery = logsQuery.where("user.branch").equals(branchId);
-      }
-
-      const logs = await logsQuery.exec();
-
-      // Fetch all branches for dropdown/filter
-      const branches = await Branch.find().exec();
-
-      // Fetch ownerBranch details for header partial
-      const ownerBranch = await Branch.findById(branchId);
+      // Fetch all branches for internal use
+      const branches = await Branch.find();
+      const ownerBranch = branches.find(b => b._id.equals(selectedBranchId)) || null;
 
       res.render("User/user-logs", {
         user,
         logs,
         branches,
-        selectedBranch: branchId,
-        ownerBranch: { branch: ownerBranch }
+        selectedBranch: selectedBranchId,
+        ownerBranch: { branch: ownerBranch },
+        selectedStatus: req.query.status || "",
+        startDate: req.query.startDate || startDate.toISOString().split("T")[0],
+        endDate: req.query.endDate || endDate.toISOString().split("T")[0],
       });
     } catch (err) {
       next(err);
     }
   }
 );
+
+
+
+
 
 
 

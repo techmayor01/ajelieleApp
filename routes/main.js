@@ -2,11 +2,13 @@ const express = require("express");
 const router = express.Router();
 const fs = require('fs');
 const path = require('path')
+const archiver = require('archiver');
+const { exec } = require('child_process');
 const multer = require('multer');
 const numberToWords = require('number-to-words');
 const mongoose = require("mongoose");
 
-
+const backupsFolder = "C:\\Users\\TECH MAYOR\\application-backup";
 
 // MULTER CONFIGURATION
 const storage = multer.diskStorage({
@@ -68,6 +70,7 @@ const ActionLog = require('../model/ActionLog');
 const Role = require('../model/Role');
 const Permission = require('../model/Permission');
 const checkPermission = require("../Utils/checkPermission");
+const ClosingAccount = require('../model/ClosingAccount');
 router.use(require("../routes/query"))
 
 
@@ -79,7 +82,7 @@ router.get("/dashboard",  checkPermission("view-dashboard"), async (req, res) =>
   if (!req.user) return res.redirect("/");
 
   try {
-    const user = await User.findById(req.user._id).populate("branch");
+    const user = await User.findById(req.user._id).populate("branch role");
     if (!user) return res.redirect("/");
 
     const branchId = user.branch?._id;
@@ -399,100 +402,83 @@ router.get("/dashboard",  checkPermission("view-dashboard"), async (req, res) =>
 
 
 // CUSTOMER ROUTE
-router.get("/customer", (req, res) => {
+router.get("/customer", checkPermission("view-customers"), async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/");
 
-  const selectedBranchId = req.query.branchId;
-  const sortBy = req.query.sort || "today";
-  const customerType = req.query.customerType || "all";
+  try {
+    const user = req.user; // from middleware
+    const sortBy = req.query.sort || "today";
+    const customerType = req.query.customerType || "all";
 
-  // DATE FILTER
-  let dateFilter = {};
-  const today = new Date();
-  today.setHours(0,0,0,0);
+    const selectedBranchId =
+      user.role.name.toLowerCase() === "owner"
+        ? req.selectedBranchId
+        : user.branch._id;
 
-  if (sortBy === "today") {
-    dateFilter = { createdAt: { $gte: today } };
-  } else if (sortBy === "last7days") {
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(today.getDate() - 7);
-    dateFilter = { createdAt: { $gte: sevenDaysAgo } };
-  } else if (sortBy === "lastMonth") {
-    const lastMonth = new Date();
-    lastMonth.setMonth(today.getMonth() - 1);
-    dateFilter = { createdAt: { $gte: lastMonth } };
-  }
+    // DATE FILTER
+    let dateFilter = {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  // CUSTOMER TYPE FILTER (fixed)
-  let typeFilter = {};
-  if (customerType === "cash") {
-    typeFilter = {
-      $and: [
-        { $or: [ { remaining_amount: { $exists: false } }, { remaining_amount: 0 } ] },
-        { $or: [ { total_debt:       { $exists: false } }, { total_debt:       0 } ] }
-      ]
-    };
-  } else if (customerType === "credit") {
-    typeFilter = {
-      $or: [
-        { remaining_amount: { $exists: true, $ne: 0 } },
-        { total_debt:       { $exists: true, $ne: 0 } }
-      ]
-    };
-  }
+    if (sortBy === "today") {
+      dateFilter = { createdAt: { $gte: today } };
+    } else if (sortBy === "last7days") {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(today.getDate() - 7);
+      dateFilter = { createdAt: { $gte: sevenDaysAgo } };
+    } else if (sortBy === "lastMonth") {
+      const lastMonth = new Date();
+      lastMonth.setMonth(today.getMonth() - 1);
+      dateFilter = { createdAt: { $gte: lastMonth } };
+    }
 
-  User.findById(req.user._id)
-    .populate("branch")
-    .then(user => {
-      if (!user) return res.redirect("/");
-
-      const baseFilters = {
-        branch: selectedBranchId || user.branch._id,
-        ...dateFilter,
-        ...typeFilter
+    // CUSTOMER TYPE FILTER
+    let typeFilter = {};
+    if (customerType === "cash") {
+      typeFilter = {
+        $and: [
+          { $or: [{ remaining_amount: { $exists: false } }, { remaining_amount: 0 }] },
+          { $or: [{ total_debt: { $exists: false } }, { total_debt: 0 }] }
+        ]
       };
+    } else if (customerType === "credit") {
+      typeFilter = {
+        $or: [
+          { remaining_amount: { $exists: true, $ne: 0 } },
+          { total_debt: { $exists: true, $ne: 0 } }
+        ]
+      };
+    }
 
-      // DEBUG: uncomment to inspect query in console
-      // console.log('Customer query filters:', JSON.stringify(baseFilters, null, 2));
+    const filters = {
+      branch: selectedBranchId,
+      ...dateFilter,
+      ...typeFilter
+    };
 
-      if (user.role === 'owner') {
-        Branch.find().then(allBranches => {
-          Customer.find(baseFilters)
-            .sort({ createdAt: -1, _id: -1 })
-            .then(customers => {
-              res.render("Customer/customer", {
-                user,
-                ownerBranch: { branch: user.branch },
-                branches: allBranches,
-                selectedBranchId: baseFilters.branch,
-                customers,
-                selectedSort: sortBy,
-                selectedCustomerType: customerType
-              });
-            });
-        });
-      } else {
-        baseFilters.branch = user.branch._id;
-        Customer.find(baseFilters)
-          .sort({ createdAt: -1, _id: -1 })
-          .then(customers => {
-            res.render("Customer/customer", {
-              user,
-              ownerBranch: { branch: user.branch },
-              branches: [user.branch],
-              selectedBranchId: user.branch._id,
-              customers,
-              selectedSort: sortBy,
-              selectedCustomerType: customerType
-            });
-          });
-      }
-    })
-    .catch(err => {
-      console.error("Error fetching user:", err);
-      res.redirect("/error-404");
+    const customers = await Customer.find(filters).sort({ createdAt: -1, _id: -1 });
+
+    // Determine ownerBranch document
+    const ownerBranch =
+      user.role.name.toLowerCase() === "owner"
+        ? req.allBranches.find(b => b._id.equals(selectedBranchId))
+        : user.branch;
+
+    res.render("Customer/customer", {
+      user,
+      ownerBranch: { branch: ownerBranch },
+      branches: user.role.name.toLowerCase() === "owner" ? req.allBranches : [user.branch],
+      selectedBranchId,
+      customers,
+      selectedSort: sortBy,
+      selectedCustomerType: customerType
     });
+  } catch (err) {
+    console.error("Error fetching customers:", err);
+    res.redirect("/error-404");
+  }
 });
+
 
 
 
@@ -743,32 +729,39 @@ router.get(
     try {
       if (!req.isAuthenticated()) return res.redirect("/");
 
-      const user = await User.findById(req.user._id).populate("branch role");
-      if (!user) return res.redirect("/");
+      const user = req.user; // from middleware
+      const selectedBranchId =
+        user.role.name.toLowerCase() === "owner"
+          ? req.selectedBranchId
+          : user.branch._id;
 
-      // Check role by user.role.name instead of user.role
-      if (user.role && user.role.name === "owner") {
-        const ownerBranch = await Branch.findById(user.branch);
-        const allBranches = await Branch.find();
-        const suppliers = await Supplier.find();
-        const invoices = await SupplierInvoice.find().populate("supplier");
+      // Fetch suppliers and invoices for the selected branch
+      const [suppliers, invoices] = await Promise.all([
+        Supplier.find(),
+        SupplierInvoice.find({ branch: selectedBranchId }).populate("supplier")
+      ]);
+
+      if (user.role.name.toLowerCase() === "owner") {
+        const selectedBranchDoc = req.allBranches.find(b =>
+          b._id.equals(selectedBranchId)
+        );
 
         return res.render("Supplier/supplierInvoice", {
           user,
-          ownerBranch: { branch: ownerBranch },
-          branches: allBranches,
+          ownerBranch: { branch: selectedBranchDoc },
+          branches: req.allBranches,
+          selectedBranchId,
           suppliers,
-          invoices,
+          invoices
         });
       } else {
-        const suppliers = await Supplier.find();
-        const invoices = await SupplierInvoice.find().populate("supplier");
-
         return res.render("Supplier/supplierInvoice", {
           user,
           ownerBranch: { branch: user.branch },
+          branches: [user.branch],
+          selectedBranchId,
           suppliers,
-          invoices,
+          invoices
         });
       }
     } catch (err) {
@@ -1059,32 +1052,26 @@ router.get(
   checkPermission("view-loans"),
   async (req, res) => {
     try {
-      const user = await User.findById(req.user._id)
-        .populate("branch")
-        .populate("role"); // ensure role is available for 'owner' check
+      const user = req.user; // from middleware
+      const selectedBranchId =
+        user.role.name.toLowerCase() === "owner"
+          ? req.selectedBranchId
+          : user.branch._id;
 
-      if (!user) return res.redirect("/");
+      // Determine ownerBranch document
+      const ownerBranch =
+        user.role.name.toLowerCase() === "owner"
+          ? req.allBranches.find(b => b._id.equals(selectedBranchId))
+          : user.branch;
 
-      if (user.role?.name === "owner") {
-        const [ownerBranch, allBranches, loaners] = await Promise.all([
-          Branch.findById(user.branch),
-          Branch.find(),
-          Loan.find()
-        ]);
-
-        return res.render("Loan/manageLoan", {
-          user,
-          ownerBranch: { branch: ownerBranch },
-          branches: allBranches,
-          loaners
-        });
-      }
-
+      // Fetch loaners (no branch filter here if Loan is global)
       const loaners = await Loan.find();
 
       res.render("Loan/manageLoan", {
         user,
-        ownerBranch: { branch: user.branch },
+        ownerBranch: { branch: ownerBranch },
+        branches: user.role.name.toLowerCase() === "owner" ? req.allBranches : [user.branch],
+        selectedBranchId,
         loaners
       });
     } catch (err) {
@@ -1093,6 +1080,7 @@ router.get(
     }
   }
 );
+
 
 
 router.get('/searchLoaner', async (req, res) => {
@@ -1266,77 +1254,54 @@ router.get(
 router.get(
   "/manageProduct",
   checkPermission("manage-stock"),
-  (req, res) => {
-    if (!req.isAuthenticated()) return res.redirect("/");
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const selectedBranchId =
+        user.role.name.toLowerCase() === "owner"
+          ? req.selectedBranchId
+          : user.branch._id;
 
-    const selectedBranchId = req.query.branchId;
+      const units = await Unit.find();
 
-    User.findById(req.user._id)
-      .populate("branch")
-      .then(user => {
-        if (!user) return res.redirect("/");
-
-        Unit.find().then(units => {
-          if (user.role === 'owner') {
-            Branch.find().then(allBranches => {
-              const branchToFilter = selectedBranchId || user.branch._id;
-              const selectedBranchDoc = allBranches.find(b => b._id.equals(branchToFilter));
-
-              Product.find({ branch: branchToFilter, status: "active" }) // ✅ Filter added
-                .populate('category')
-                .populate('branch')
-                .populate('variants.supplier')
-                .then(products => {
-                  res.render("Product/manageProduct", {
-                    user,
-                    ownerBranch: { branch: selectedBranchDoc },
-                    branches: allBranches,
-                    selectedBranchId: branchToFilter,
-                    products,
-                    units
-                  });
-                })
-                .catch(err => {
-                  console.error(err);
-                  res.redirect("/error-404");
-                });
-            }).catch(err => {
-              console.error(err);
-              res.redirect("/error-404");
-            });
-          } else {
-            Product.find({ branch: user.branch._id, status: "active" }) // ✅ Filter added
-              .populate('category')
-              .populate('branch')
-              .populate('variants.supplier')
-              .then(products => {
-                res.render("Product/manageProduct", {
-                  user,
-                  ownerBranch: { branch: user.branch },
-                  branches: [user.branch],
-                  selectedBranchId: user.branch._id,
-                  products,
-                  units
-                });
-              })
-              .catch(err => {
-                console.error(err);
-                res.redirect("/error-404");
-              });
-          }
-
-        }).catch(err => {
-          console.error(err);
-          res.redirect("/error-404");
-        });
-
+      const products = await Product.find({
+        branch: selectedBranchId,
+        status: "active"
       })
-      .catch(err => {
-        console.error(err);
-        res.redirect("/error-404");
-      });
+        .populate("category")
+        .populate("branch")
+        .populate("variants.supplier");
+
+      if (user.role.name.toLowerCase() === "owner") {
+        const selectedBranchDoc = req.allBranches.find(b =>
+          b._id.equals(selectedBranchId)
+        );
+
+        return res.render("Product/manageProduct", {
+          user,
+          ownerBranch: { branch: selectedBranchDoc },
+          branches: req.allBranches,
+          selectedBranchId,
+          products,
+          units
+        });
+      } else {
+        return res.render("Product/manageProduct", {
+          user,
+          ownerBranch: { branch: user.branch },
+          branches: [user.branch],
+          selectedBranchId,
+          products,
+          units
+        });
+      }
+    } catch (err) {
+      console.error("Error loading manageProduct:", err);
+      res.redirect("/error-404");
+    }
   }
 );
+
 
 
 
@@ -1654,117 +1619,89 @@ router.post(
 
 
 
+router.get(
+  "/adjustStock",
+  checkPermission("adjust-stock"),
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const selectedBranchId =
+        user.role.name.toLowerCase() === "owner"
+          ? req.selectedBranchId
+          : user.branch._id;
 
+      const currentSort = req.query.sort;
+      const units = await Unit.find();
 
+      let sortOption = { createdAt: -1 };
+      if (currentSort === "ascending") sortOption = { createdAt: 1 };
+      else if (currentSort === "descending") sortOption = { createdAt: -1 };
 
-router.get("/adjustStock", async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
+      const products = await Product.find({ branch: selectedBranchId })
+        .populate("category")
+        .populate("branch");
 
-  const selectedBranchId = req.query.branchId;
-  const currentSort = req.query.sort;
+      let adjustmentsQuery = StockAdjustment.find().where(
+        "product"
+      ).in(products.map(p => p._id));
 
-  try {
-    const user = await User.findById(req.user._id).populate("branch");
-    if (!user) return res.redirect("/");
-
-    const units = await Unit.find();
-
-    let sortOption = { createdAt: -1 }; // default
-
-    if (currentSort === "ascending") sortOption = { createdAt: 1 };
-    else if (currentSort === "descending") sortOption = { createdAt: -1 };
-
-    if (user.role === 'owner') {
-      const allBranches = await Branch.find();
-      const branchToUse = selectedBranchId || user.branch._id;
-
-      // get actual branch document
-      const branchDoc = allBranches.find(b => b._id.equals(branchToUse));
-
-      // get products in selected branch
-      const products = await Product.find({ branch: branchToUse })
-        .populate('category')
-        .populate('branch');
-
-      let adjustmentsQuery = StockAdjustment.find().where('product').in(products.map(p => p._id));
-
-      // Apply date filters
       if (currentSort === "today") {
         const today = new Date();
-        today.setHours(0,0,0,0);
-        adjustmentsQuery = adjustmentsQuery.where('createdAt').gte(today);
+        today.setHours(0, 0, 0, 0);
+        adjustmentsQuery = adjustmentsQuery.where("createdAt").gte(today);
       } else if (currentSort === "lastMonth") {
         const now = new Date();
         const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-        adjustmentsQuery = adjustmentsQuery.where('createdAt').gte(firstDayLastMonth).lte(lastDayLastMonth);
+        adjustmentsQuery = adjustmentsQuery.where("createdAt")
+          .gte(firstDayLastMonth)
+          .lte(lastDayLastMonth);
       } else if (currentSort === "last7days") {
         const last7days = new Date();
         last7days.setDate(last7days.getDate() - 7);
-        adjustmentsQuery = adjustmentsQuery.where('createdAt').gte(last7days);
+        adjustmentsQuery = adjustmentsQuery.where("createdAt").gte(last7days);
       }
 
       const adjustments = await adjustmentsQuery
-        .populate('adjustedBy')
-        .populate('product')
+        .populate("adjustedBy")
+        .populate("product")
         .sort(sortOption)
         .limit(20);
 
-      return res.render("Product/stock-adjustment", {
-        user,
-        ownerBranch: { branch: branchDoc },  // ✅ use actual selected branch doc
-        branches: allBranches,
-        selectedBranchId: branchToUse,
-        products,
-        units,
-        adjustments,
-        currentSort
-      });
-    } else {
-      // staff: only own branch
-      const products = await Product.find({ branch: user.branch._id })
-        .populate('category')
-        .populate('branch');
+      if (user.role.name.toLowerCase() === "owner") {
+        const selectedBranchDoc = req.allBranches.find(b =>
+          b._id.equals(selectedBranchId)
+        );
 
-      let adjustmentsQuery = StockAdjustment.find().where('product').in(products.map(p => p._id));
-
-      if (currentSort === "today") {
-        const today = new Date();
-        today.setHours(0,0,0,0);
-        adjustmentsQuery = adjustmentsQuery.where('createdAt').gte(today);
-      } else if (currentSort === "lastMonth") {
-        const now = new Date();
-        const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-        adjustmentsQuery = adjustmentsQuery.where('createdAt').gte(firstDayLastMonth).lte(lastDayLastMonth);
-      } else if (currentSort === "last7days") {
-        const last7days = new Date();
-        last7days.setDate(last7days.getDate() - 7);
-        adjustmentsQuery = adjustmentsQuery.where('createdAt').gte(last7days);
+        return res.render("Product/stock-adjustment", {
+          user,
+          ownerBranch: { branch: selectedBranchDoc },
+          branches: req.allBranches,
+          selectedBranchId,
+          products,
+          units,
+          adjustments,
+          currentSort
+        });
+      } else {
+        return res.render("Product/stock-adjustment", {
+          user,
+          ownerBranch: { branch: user.branch },
+          branches: [user.branch],
+          selectedBranchId,
+          products,
+          units,
+          adjustments,
+          currentSort
+        });
       }
-
-      const adjustments = await adjustmentsQuery
-        .populate('adjustedBy')
-        .populate('product')
-        .sort(sortOption)
-        .limit(20);
-
-      return res.render("Product/stock-adjustment", {
-        user,
-        ownerBranch: { branch: user.branch },
-        branches: [user.branch],
-        selectedBranchId: user.branch._id,
-        products,
-        units,
-        adjustments,
-        currentSort
-      });
+    } catch (err) {
+      console.error("Error loading adjustStock page:", err);
+      res.redirect("/error-404");
     }
-  } catch (err) {
-    console.error("Error loading adjustStock page:", err);
-    res.redirect("/error-404");
   }
-});
+);
+
 
 
 
@@ -1806,11 +1743,11 @@ router.post(
 );
 
 
-router.get('/search-product', async (req, res) => {
-  const q = req.query.q.toLowerCase();
-  const products = await Product.find({ product: { $regex: q, $options: 'i' } }).select('product _id');
-  res.json(products);
-});
+// router.get('/search-product', async (req, res) => {
+//   const q = req.query.q.toLowerCase();
+//   const products = await Product.find({ product: { $regex: q, $options: 'i' } }).select('product _id');
+//   res.json(products);
+// });
 
 router.get('/get-product/:id', async (req, res) => {
   const product = await Product.findById(req.params.id);
@@ -1958,79 +1895,62 @@ router.post(
 
 
 
+router.get(
+  "/price-adjustments",
+  checkPermission("view-price-adjustments"),
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const selectedBranchId =
+        user.role.name.toLowerCase() === "owner"
+          ? req.selectedBranchId
+          : user.branch._id;
 
+      const units = await Unit.find();
 
+      const products = await Product.find({ branch: selectedBranchId })
+        .populate("category")
+        .populate("branch");
 
+      const adjustments = await PriceAdjustment.find({
+        product: { $in: products.map(p => p._id) }
+      })
+        .populate("product")
+        .populate("adjustedBy")
+        .sort({ createdAt: -1 });
 
-router.get('/price-adjustments', async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect('/');
+      if (user.role.name.toLowerCase() === "owner") {
+        const selectedBranchDoc = req.allBranches.find(b =>
+          b._id.equals(selectedBranchId)
+        );
 
-  try {
-    const selectedBranchId = req.query.branchId;
-
-    // get logged in user & branch
-    const user = await User.findById(req.user._id).populate('branch');
-    if (!user) return res.redirect('/');
-
-    // get units (if you need them on the page)
-    const units = await Unit.find();
-
-    if (user.role === 'owner') {
-      // owner: see all branches & pick one
-      const allBranches = await Branch.find();
-      const branchToUse = selectedBranchId || user.branch._id;
-
-      // 🟩 find actual selected branch doc
-      const selectedBranchDoc = allBranches.find(b => b._id.equals(branchToUse));
-
-      // get products of selected branch
-      const products = await Product.find({ branch: branchToUse })
-                                    .populate('category')
-                                    .populate('branch');
-
-      // get all price adjustments for these products
-      const adjustments = await PriceAdjustment.find({ product: { $in: products.map(p => p._id) } })
-                                  .populate('product')
-                                  .populate('adjustedBy')
-                                  .sort({ createdAt: -1 });
-
-      res.render('Product/price-adjustment', {
-        user,
-        ownerBranch: { branch: selectedBranchDoc },     // ✅ use actual selected branch
-        branches: allBranches,
-        selectedBranchId: branchToUse,
-        products,
-        adjustments,
-        units
-      });
-
-    } else {
-      // staff: see only their branch
-      const products = await Product.find({ branch: user.branch._id })
-                                    .populate('category')
-                                    .populate('branch');
-
-      const adjustments = await PriceAdjustment.find({ product: { $in: products.map(p => p._id) } })
-                                  .populate('product')
-                                  .populate('adjustedBy')
-                                  .sort({ createdAt: -1 });
-
-      res.render('Product/price-adjustment', {
-        user,
-        ownerBranch: { branch: user.branch },
-        branches: [user.branch],
-        selectedBranchId: user.branch._id,
-        products,
-        adjustments,
-        units
-      });
+        return res.render("Product/price-adjustment", {
+          user,
+          ownerBranch: { branch: selectedBranchDoc },
+          branches: req.allBranches,
+          selectedBranchId,
+          products,
+          adjustments,
+          units
+        });
+      } else {
+        return res.render("Product/price-adjustment", {
+          user,
+          ownerBranch: { branch: user.branch },
+          branches: [user.branch],
+          selectedBranchId,
+          products,
+          adjustments,
+          units
+        });
+      }
+    } catch (err) {
+      console.error("Error loading price adjustment page:", err);
+      res.redirect("/error-404");
     }
-
-  } catch (err) {
-    console.error('Error loading price adjustment page:', err);
-    res.redirect('/error-404');
   }
-});
+);
+
 
 router.post(
   '/adjust-price',
@@ -3865,27 +3785,37 @@ router.get(
 );
 
 
-router.post("/settings/toggle-negative-sales", async (req, res) => {
-  if (!req.isAuthenticated() || req.user.role !== 'owner') {
-    return res.status(403).json({ success: false, message: "Forbidden" });
-  }
+router.post(
+  "/settings/toggle-negative-sales",
+  checkPermission("manage-settings"),
+  async (req, res) => {
+    try {
+      const user = req.user;
 
-  try {
-    let config = await Config.findOne({ key: "negativeSalesActive" });
-    if (!config) {
-      config = new Config({ key: "negativeSalesActive", value: true });
-    } else {
-      config.value = !config.value;
+      if (user.role.name.toLowerCase() !== "owner") {
+        return res
+          .status(403)
+          .json({ success: false, message: "Forbidden" });
+      }
+
+      let config = await Config.findOne({ key: "negativeSalesActive" });
+      if (!config) {
+        config = new Config({ key: "negativeSalesActive", value: true });
+      } else {
+        config.value = !config.value;
+      }
+
+      await config.save();
+
+      res.json({ success: true, active: config.value });
+    } catch (err) {
+      console.error("Error toggling negative sales setting:", err);
+      res
+        .status(500)
+        .json({ success: false, message: "Server Error" });
     }
-
-    await config.save();
-
-    res.json({ success: true, active: config.value });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server Error" });
   }
-});
+);
 
 router.get('/searchCustomer', async (req, res) => {
   const { q } = req.query;
@@ -3908,12 +3838,6 @@ router.get('/searchCustomer', async (req, res) => {
     res.status(500).json([]);
   }
 });
-
-
-// router.post('/addinvoice', async (req, res, next) => {
-//   console.log("Received request to add invoice:", req.body);
-  
-// });
 
 // Express route example
 router.get("/getCustomerBalance", async (req, res) => {
@@ -3979,39 +3903,38 @@ router.get(
     if (!req.isAuthenticated()) return res.redirect("/");
 
     try {
-      // Populate role as well (assuming role is a ref)
-      const user = await User.findById(req.user._id).populate("branch role");
-      if (!user) return res.redirect("/");
+      const user = req.user;
+      const selectedBranchId =
+        user.role.name.toLowerCase() === "owner"
+          ? req.selectedBranchId
+          : user.branch._id;
 
-      const branchId = user.branch._id || user.branch;
+      const invoices = await Invoice.find({ branch: selectedBranchId })
+        .populate("customer_id")
+        .populate({
+          path: "createdBy",
+          populate: { path: "role" }
+        })
+        .sort({ createdAt: -1, _id: -1 });
 
-      // Always fetch all branches (for header dropdown)
-      const allBranches = await Branch.find();
-
-      if (user.role.name === "owner") {
-        const ownerBranch = await Branch.findById(branchId);
-
-        const invoices = await Invoice.find({ branch: branchId })
-          .populate("customer_id")
-          .populate("createdBy")
-          .sort({ createdAt: -1, _id: -1 });
+      if (user.role.name.toLowerCase() === "owner") {
+        const selectedBranchDoc = req.allBranches.find(b =>
+          b._id.equals(selectedBranchId)
+        );
 
         return res.render("Sales/manage-sales", {
           user,
-          ownerBranch: { branch: ownerBranch },
-          branches: allBranches,       // important for header.ejs
+          ownerBranch: { branch: selectedBranchDoc },
+          branches: req.allBranches,
+          selectedBranchId,
           invoices,
         });
       } else {
-        const invoices = await Invoice.find({ branch: branchId })
-          .populate("customer_id")
-          .populate("createdBy")
-          .sort({ createdAt: -1, _id: -1 });
-
         return res.render("Sales/manage-sales", {
           user,
           ownerBranch: { branch: user.branch },
-          branches: allBranches,       // important for header.ejs
+          branches: [user.branch],
+          selectedBranchId,
           invoices,
         });
       }
@@ -4025,94 +3948,82 @@ router.get(
 
 
 
+
 // SALES ROUTE ENDS HERE ................ TECH MYOR 
 
 
 // EXPIRED PRODUCTS ROUTE STARTS HERE
-router.get("/expiredProducts", async (req, res) => {
-  const currentDate = new Date();
-  const selectedBranchId = req.query.branchId;
+router.get(
+  "/expiredProducts",
+  checkPermission("view-expired-products"),
+  async (req, res) => {
+    const currentDate = new Date();
 
-  if (!req.isAuthenticated()) return res.redirect("/");
-
-  try {
-    const user = await User.findById(req.user._id).populate("branch");
-    if (!user) return res.redirect("/");
-
-    // OWNER ROUTE
-    if (user.role === "owner") {
-      const allBranches = await Branch.find();
-      const branchToFilter = selectedBranchId || user.branch._id;
-
-      // 🟩 Find actual selected branch document
-      const branchDoc = allBranches.find(b => b._id.equals(branchToFilter));
+    try {
+      const user = req.user;
+      const selectedBranchId =
+        req.user.role.name.toLowerCase() === "owner"
+          ? req.selectedBranchId
+          : user.branch._id;
 
       const expiredProducts = await Product.find({
-        branch: branchToFilter,
+        branch: selectedBranchId,
         expDate: { $lt: currentDate }
       }).populate("branch category variants.supplier");
 
       if (expiredProducts.length > 0) {
+        const pageLink = `/expiredProducts?branchId=${selectedBranchId}`;
         const existingNotification = await Notification.findOne({
           type: "expiredStock",
-          pageLink: `/expiredProducts?branchId=${branchDoc._id}`,
+          pageLink,
           isDismissed: false
         });
 
         if (!existingNotification) {
+          const branchName =
+            user.role.name.toLowerCase() === "owner"
+              ? req.allBranches.find(b => b._id.equals(selectedBranchId))
+                  ?.branch_name
+              : user.branch.branch_name;
+
           await Notification.create({
             title: "Expired Stock Alert",
-            description: `There are ${expiredProducts.length} expired product(s) at branch ${branchDoc.branch_name}.`,
+            description: `There ${
+              expiredProducts.length === 1 ? "is" : "are"
+            } ${expiredProducts.length} expired product(s) at branch ${branchName}.`,
             type: "expiredStock",
-            pageLink: `/expiredProducts?branchId=${branchDoc._id}`
+            pageLink
           });
         }
       }
 
-      return res.render("ExpiredProducts/expiredProducts", {
-        user,
-        ownerBranch: { branch: branchDoc },     // ✅ pass actual selected branch doc
-        branches: allBranches,
-        selectedBranchId: branchToFilter,
-        expiredProducts
-      });
-    }
-
-    // STAFF ROUTE
-    const expiredProducts = await Product.find({
-      branch: user.branch._id,
-      expDate: { $lt: currentDate }
-    }).populate("branch category variants.supplier");
-
-    if (expiredProducts.length > 0) {
-      const existingNotification = await Notification.findOne({
-        type: "expiredStock",
-        pageLink: `/expiredProducts?branchId=${user.branch._id}`,
-        isDismissed: false
-      });
-
-      if (!existingNotification) {
-        await Notification.create({
-          title: "Expired Stock Alert",
-          description: `You have ${expiredProducts.length} expired product(s) at branch ${user.branch.branch_name}.`,
-          type: "expiredStock",
-          pageLink: `/expiredProducts?branchId=${user.branch._id}`
+      if (user.role.name.toLowerCase() === "owner") {
+        const selectedBranchDoc = req.allBranches.find(b =>
+          b._id.equals(selectedBranchId)
+        );
+        return res.render("ExpiredProducts/expiredProducts", {
+          user,
+          ownerBranch: { branch: selectedBranchDoc },
+          branches: req.allBranches,
+          selectedBranchId,
+          expiredProducts
+        });
+      } else {
+        return res.render("ExpiredProducts/expiredProducts", {
+          user,
+          ownerBranch: { branch: user.branch },
+          branches: [user.branch],
+          selectedBranchId,
+          expiredProducts
         });
       }
+    } catch (err) {
+      console.error(err);
+      res.redirect("/error-404");
     }
-
-    return res.render("ExpiredProducts/expiredProducts", {
-      user,
-      ownerBranch: { branch: user.branch },
-      branches: [user.branch],
-      selectedBranchId: user.branch._id,
-      expiredProducts
-    });
-  } catch (err) {
-    console.error(err);
-    res.redirect("/error-404");
   }
-});
+);
+
 
 router.post("/edit-expired-product", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/");
@@ -4134,309 +4045,198 @@ router.post("/edit-expired-product", async (req, res) => {
 
 // LOW STOCK ROUTE STARTS HERE
 
-router.get("/lowStock", async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
+router.get(
+  "/lowStock",
+  checkPermission("view-low-stocks"), // adjust permission name if needed
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const selectedBranchId =
+        user.role.name.toLowerCase() === "owner"
+          ? req.selectedBranchId
+          : user.branch._id;
 
-  const selectedBranchId = req.query.branchId;
-
-  try {
-    const user = await User.findById(req.user._id).populate("branch");
-    if (!user) return res.redirect("/");
-
-    if (user.role === "owner") {
-      const allBranches = await Branch.find();
-      const branchToFilter = selectedBranchId || user.branch._id;
-
-      // 🟩 Find actual selected branch doc
-      const branchDoc = allBranches.find(b => b._id.equals(branchToFilter));
-
-      // LOW STOCK: products with any variant quantity <= lowStockAlert
-      let lowStockProducts = await Product.aggregate([
-        { $match: { branch: new mongoose.Types.ObjectId(branchToFilter) } },
-        {
-          $addFields: {
-            hasLowStock: {
-              $gt: [
-                {
-                  $size: {
-                    $filter: {
-                      input: "$variants",
-                      as: "v",
-                      cond: { $lte: ["$$v.quantity", "$$v.lowStockAlert"] }
+      // Helper: fetch low stock & out of stock products for a branch
+      const getStockData = async (branchId) => {
+        let lowStockProducts = await Product.aggregate([
+          { $match: { branch: new mongoose.Types.ObjectId(branchId) } },
+          {
+            $addFields: {
+              hasLowStock: {
+                $gt: [
+                  {
+                    $size: {
+                      $filter: {
+                        input: "$variants",
+                        as: "v",
+                        cond: { $lte: ["$$v.quantity", "$$v.lowStockAlert"] }
+                      }
                     }
-                  }
-                },
-                0
-              ]
-            }
-          }
-        },
-        { $match: { hasLowStock: true } }
-      ]);
-
-      // OUT OF STOCK: products where all variants have quantity <= 0
-      let outOfStockProducts = await Product.aggregate([
-        { $match: { branch: new mongoose.Types.ObjectId(branchToFilter) } },
-        {
-          $addFields: {
-            totalVariants: { $size: "$variants" },
-            zeroVariantsCount: {
-              $size: {
-                $filter: {
-                  input: "$variants",
-                  as: "v",
-                  cond: { $lte: ["$$v.quantity", 0] }
-                }
+                  },
+                  0
+                ]
               }
             }
-          }
-        },
-        { $match: { $expr: { $eq: ["$totalVariants", "$zeroVariantsCount"] } } }
-      ]);
+          },
+          { $match: { hasLowStock: true } }
+        ]);
 
-      // Populate
-      lowStockProducts = await Product.populate(lowStockProducts, [
-        { path: "branch" },
-        { path: "category" },
-        { path: "variants.supplier" }
-      ]);
-      outOfStockProducts = await Product.populate(outOfStockProducts, [
-        { path: "branch" },
-        { path: "category" },
-        { path: "variants.supplier" }
-      ]);
-
-      // Notification for low stock
-      if (lowStockProducts.length > 0) {
-        const existingLowStockNotification = await Notification.findOne({
-          type: "lowStock",
-          pageLink: `/lowStock?branchId=${branchDoc._id}`,
-          isDismissed: false
-        });
-        if (!existingLowStockNotification) {
-          await Notification.create({
-            title: "Low Stock Alert",
-            description: `There are ${lowStockProducts.length} low stock product(s) at branch ${branchDoc.branch_name}.`,
-            type: "lowStock",
-            pageLink: `/lowStock?branchId=${branchDoc._id}`,
-            branch: branchDoc._id
-          });
-        }
-      }
-
-      // Notification for out of stock
-      if (outOfStockProducts.length > 0) {
-        const existingOutOfStockNotification = await Notification.findOne({
-          type: "outOfStock",
-          pageLink: `/lowStock?branchId=${branchDoc._id}`,
-          isDismissed: false
-        });
-        if (!existingOutOfStockNotification) {
-          await Notification.create({
-            title: "Out of Stock Alert",
-            description: `There are ${outOfStockProducts.length} completely out of stock product(s) at branch ${branchDoc.branch_name}.`,
-            type: "outOfStock",
-            pageLink: `/lowStock?branchId=${branchDoc._id}`,
-            branch: branchDoc._id
-          });
-        }
-      }
-
-      return res.render("LowStock/low-stock", {
-        user,
-        ownerBranch: { branch: branchDoc },  // ✅ pass actual selected branch
-        branches: allBranches,
-        selectedBranchId: branchToFilter,
-        lowStockProducts,
-        outOfStockProducts
-      });
-    }
-
-    // STAFF ROUTE
-    let lowStockProducts = await Product.aggregate([
-      { $match: { branch: new mongoose.Types.ObjectId(user.branch._id) } },
-      {
-        $addFields: {
-          hasLowStock: {
-            $gt: [
-              {
+        let outOfStockProducts = await Product.aggregate([
+          { $match: { branch: new mongoose.Types.ObjectId(branchId) } },
+          {
+            $addFields: {
+              totalVariants: { $size: "$variants" },
+              zeroVariantsCount: {
                 $size: {
                   $filter: {
                     input: "$variants",
                     as: "v",
-                    cond: { $lte: ["$$v.quantity", "$$v.lowStockAlert"] }
+                    cond: { $lte: ["$$v.quantity", 0] }
                   }
                 }
-              },
-              0
-            ]
-          }
-        }
-      },
-      { $match: { hasLowStock: true } }
-    ]);
-
-    let outOfStockProducts = await Product.aggregate([
-      { $match: { branch: new mongoose.Types.ObjectId(user.branch._id) } },
-      {
-        $addFields: {
-          totalVariants: { $size: "$variants" },
-          zeroVariantsCount: {
-            $size: {
-              $filter: {
-                input: "$variants",
-                as: "v",
-                cond: { $lte: ["$$v.quantity", 0] }
               }
             }
-          }
+          },
+          { $match: { $expr: { $eq: ["$totalVariants", "$zeroVariantsCount"] } } }
+        ]);
+
+        // Populate results
+        lowStockProducts = await Product.populate(lowStockProducts, [
+          { path: "branch" },
+          { path: "category" },
+          { path: "variants.supplier" }
+        ]);
+        outOfStockProducts = await Product.populate(outOfStockProducts, [
+          { path: "branch" },
+          { path: "category" },
+          { path: "variants.supplier" }
+        ]);
+
+        return { lowStockProducts, outOfStockProducts };
+      };
+
+      // Fetch stock data
+      const { lowStockProducts, outOfStockProducts } = await getStockData(selectedBranchId);
+
+      // Notifications
+      const branchName =
+        user.role.name.toLowerCase() === "owner"
+          ? req.allBranches.find(b => b._id.equals(selectedBranchId))?.branch_name
+          : user.branch.branch_name;
+
+      const createNotification = async (type, count) => {
+        const pageLink = `/lowStock?branchId=${selectedBranchId}`;
+        const exists = await Notification.findOne({
+          type,
+          pageLink,
+          isDismissed: false
+        });
+        if (!exists) {
+          await Notification.create({
+            title: type === "lowStock" ? "Low Stock Alert" : "Out of Stock Alert",
+            description: `There ${count === 1 ? "is" : "are"} ${count} ${
+              type === "lowStock" ? "low stock" : "completely out of stock"
+            } product(s) at branch ${branchName}.`,
+            type,
+            pageLink,
+            branch: selectedBranchId
+          });
         }
-      },
-      { $match: { $expr: { $eq: ["$totalVariants", "$zeroVariantsCount"] } } }
-    ]);
+      };
 
-    // Populate
-    lowStockProducts = await Product.populate(lowStockProducts, [
-      { path: "branch" },
-      { path: "category" },
-      { path: "variants.supplier" }
-    ]);
-    outOfStockProducts = await Product.populate(outOfStockProducts, [
-      { path: "branch" },
-      { path: "category" },
-      { path: "variants.supplier" }
-    ]);
+      if (lowStockProducts.length > 0) {
+        await createNotification("lowStock", lowStockProducts.length);
+      }
+      if (outOfStockProducts.length > 0) {
+        await createNotification("outOfStock", outOfStockProducts.length);
+      }
 
-    // Notifications for staff (always add branch)
-    if (lowStockProducts.length > 0) {
-      const existingLowStockNotification = await Notification.findOne({
-        type: "lowStock",
-        pageLink: `/lowStock?branchId=${user.branch._id}`,
-        isDismissed: false
-      });
-      if (!existingLowStockNotification) {
-        await Notification.create({
-          title: "Low Stock Alert",
-          description: `You have ${lowStockProducts.length} low stock product(s) at branch ${user.branch.branch_name}.`,
-          type: "lowStock",
-          pageLink: `/lowStock?branchId=${user.branch._id}`,
-          branch: user.branch._id
+      // Render view
+      if (user.role.name.toLowerCase() === "owner") {
+        const selectedBranchDoc = req.allBranches.find(b =>
+          b._id.equals(selectedBranchId)
+        );
+        return res.render("LowStock/low-stock", {
+          user,
+          ownerBranch: { branch: selectedBranchDoc },
+          branches: req.allBranches,
+          selectedBranchId,
+          lowStockProducts,
+          outOfStockProducts
+        });
+      } else {
+        return res.render("LowStock/low-stock", {
+          user,
+          ownerBranch: { branch: user.branch },
+          branches: [user.branch],
+          selectedBranchId,
+          lowStockProducts,
+          outOfStockProducts
         });
       }
+    } catch (err) {
+      console.error("Error loading low stock:", err);
+      res.redirect("/error-404");
     }
-
-    if (outOfStockProducts.length > 0) {
-      const existingOutOfStockNotification = await Notification.findOne({
-        type: "outOfStock",
-        pageLink: `/lowStock?branchId=${user.branch._id}`,
-        isDismissed: false
-      });
-      if (!existingOutOfStockNotification) {
-        await Notification.create({
-          title: "Out of Stock Alert",
-          description: `You have ${outOfStockProducts.length} completely out of stock product(s) at branch ${user.branch.branch_name}.`,
-          type: "outOfStock",
-          pageLink: `/lowStock?branchId=${user.branch._id}`,
-          branch: user.branch._id
-        });
-      }
-    }
-
-    return res.render("LowStock/low-stock", {
-      user,
-      ownerBranch: { branch: user.branch },
-      branches: [user.branch],
-      selectedBranchId: user.branch._id,
-      lowStockProducts,
-      outOfStockProducts
-    });
-  } catch (err) {
-    console.error(err);
-    res.redirect("/error-404");
   }
-});
+);
+
 
 
 // LOW STOCK ROUTE ENDS HERE ----------------- TECH MAYOR GROUPS
 
 // EXPENSE ROUTE STARTS HERE
 
-router.get("/expense", (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.redirect("/");
-  }
+router.get(
+  "/expense",
+  checkPermission("view-expenses"), // adjust permission name if needed
+  async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/");
 
-  const selectedBranchId = req.query.branchId; // ✅ from dropdown link
+    try {
+      const user = req.user; // from middleware
+      const selectedBranchId =
+        user.role.name.toLowerCase() === "owner"
+          ? req.selectedBranchId
+          : user.branch._id;
 
-  User.findById(req.user._id)
-    .populate("branch")
-    .then(user => {
-      if (!user) return res.redirect("/");
+      // Fetch expenses and categories for the selected branch
+      const [expenses, expenseCategories] = await Promise.all([
+        Expense.find({ branch: selectedBranchId })
+          .populate("branch")
+          .populate("category"),
+        ExpenseCategory.find({})
+      ]);
 
-      if (user.role === "owner") {
-        Branch.findById(user.branch)
-          .then(ownerBranch => {
-            Branch.find()
-              .then(allBranches => {
-                const branchToUse = selectedBranchId || ownerBranch._id; // ✅ switch branch if selected
-                Promise.all([
-                  Expense.find({ branch: branchToUse })
-                    .populate("branch")
-                    .populate("category"),
-                  ExpenseCategory.find({ branch: branchToUse }) // ✅ optional: filter categories too
-                ])
-                  .then(([expenses, expenseCategories]) => {
-                    res.render("Expense/expense", {
-                      user,
-                      ownerBranch: { branch: ownerBranch },
-                      branches: allBranches,
-                      expenses,
-                      expenseCategories
-                    });
-                  })
-                  .catch(err => {
-                    console.error("Error fetching expenses or categories:", err);
-                    res.redirect("/error-404");
-                  });
-              })
-              .catch(err => {
-                console.error("Error fetching branches:", err);
-                res.redirect("/error-404");
-              });
-          })
-          .catch(err => {
-            console.error("Error fetching owner branch:", err);
-            res.redirect("/error-404");
-          });
+      if (user.role.name.toLowerCase() === "owner") {
+        const selectedBranchDoc = req.allBranches.find(b =>
+          b._id.equals(selectedBranchId)
+        );
 
+        return res.render("Expense/expense", {
+          user,
+          ownerBranch: { branch: selectedBranchDoc },
+          branches: req.allBranches,
+          selectedBranchId,
+          expenses,
+          expenseCategories
+        });
       } else {
-        const branchToUse = selectedBranchId || user.branch._id;
-        Promise.all([
-          Expense.find({ branch: branchToUse })
-            .populate("branch")
-            .populate("category"),
-          ExpenseCategory.find({ branch: branchToUse })
-        ])
-          .then(([expenses, expenseCategories]) => {
-            res.render("Expense/expense", {
-              user,
-              ownerBranch: { branch: user.branch },
-              branches: [user.branch],
-              expenses,
-              expenseCategories
-            });
-          })
-          .catch(err => {
-            console.error("Error fetching expenses or categories:", err);
-            res.redirect("/error-404");
-          });
+        return res.render("Expense/expense", {
+          user,
+          ownerBranch: { branch: user.branch },
+          branches: [user.branch],
+          selectedBranchId,
+          expenses,
+          expenseCategories
+        });
       }
-    })
-    .catch(err => {
-      console.error("Error fetching user:", err);
+    } catch (err) {
+      console.error("Error loading expense page:", err);
       res.redirect("/error-404");
-    });
-});
+    }
+  }
+);
 
 
 
@@ -4617,26 +4417,23 @@ router.get(
   checkPermission("view-payments"),
   async (req, res) => {
     try {
-      const user = await User.findById(req.user._id)
-        .populate("branch")
-        .populate("role"); // ensure role is populated for owner check
+      const user = req.user; // from middleware
+      const selectedBranchId =
+        user.role.name.toLowerCase() === "owner"
+          ? req.selectedBranchId
+          : user.branch._id;
 
-      if (!user) return res.redirect("/");
+      // Fetch owner branch document if user is owner
+      const ownerBranch =
+        user.role.name.toLowerCase() === "owner"
+          ? req.allBranches.find(b => b._id.equals(selectedBranchId))
+          : user.branch;
 
-      const branchId = user.branch._id || user.branch;
-
-      const [ownerBranch, allBranches] =
-        user.role?.name === "owner"
-          ? await Promise.all([
-              Branch.findById(branchId),
-              Branch.find()
-            ])
-          : [user.branch, null];
-
+      // Fetch customers, loans, and transactions for selected branch
       const [customers, loans, transactionsRaw] = await Promise.all([
-        Customer.find({ branch: branchId }),
-        Loan.find({ branch: branchId }),
-        Transaction.find({ branch: branchId })
+        Customer.find({ branch: selectedBranchId }),
+        Loan.find({ branch: selectedBranchId }),
+        Transaction.find({ branch: selectedBranchId })
           .sort({ paymentDate: -1 })
           .populate("userId")
       ]);
@@ -4668,7 +4465,8 @@ router.get(
       res.render("Transaction/transaction", {
         user,
         ownerBranch: { branch: ownerBranch },
-        branches: allBranches,
+        branches: user.role.name.toLowerCase() === "owner" ? req.allBranches : [user.branch],
+        selectedBranchId,
         customers,
         loans,
         transactions
@@ -4679,6 +4477,7 @@ router.get(
     }
   }
 );
+
 
 router.get("/searchClient", async (req, res) => {
   const { q, type } = req.query;
@@ -5705,6 +5504,295 @@ router.post("/roles/:roleId/permissions", async (req, res) => {
     res.redirect("/error-404");
   }
 });
+
+router.get(
+  "/close-account",
+  checkPermission("view-close-account"),
+  async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/");
+
+    try {
+      const user = req.user;
+
+      // Determine branch
+      const selectedBranchId =
+        user.role.name.toLowerCase() === "owner"
+          ? req.query.branch || req.selectedBranchId
+          : user.branch._id;
+
+      const ownerBranch =
+        user.role.name.toLowerCase() === "owner"
+          ? req.allBranches.find((b) => b._id.equals(selectedBranchId))
+          : user.branch;
+
+      // Get optional date filters
+      const { startDate, endDate } = req.query;
+
+      let filter = { branch: selectedBranchId };
+
+      // Only apply date filter if both start and end are provided
+      let showResults = false;
+      if (startDate && endDate) {
+        showResults = true;
+        filter.date = {
+          $gte: new Date(Date.UTC(new Date(startDate).getUTCFullYear(), new Date(startDate).getUTCMonth(), new Date(startDate).getUTCDate())),
+          $lt: new Date(Date.UTC(new Date(endDate).getUTCFullYear(), new Date(endDate).getUTCMonth(), new Date(endDate).getUTCDate() + 1)),
+        };
+      }
+
+      // Fetch closing accounts only if searching
+      const closingAccounts = showResults
+        ? await ClosingAccount.find(filter).lean()
+        : [];
+
+      res.render("User/close-account", {
+        user,
+        ownerBranch: { branch: ownerBranch },
+        branches:
+          user.role.name.toLowerCase() === "owner"
+            ? req.allBranches
+            : [user.branch],
+        selectedBranchId,
+        closingAccounts,
+        query: { startDate, endDate },
+        showResults, // this flag tells the template whether to render the table
+      });
+    } catch (err) {
+      console.error("Error loading close-account page:", err);
+      res.redirect("/error-404");
+    }
+  }
+);
+
+
+router.post('/close-account', async (req, res) => {
+  try {
+    const { payment_date } = req.body;
+
+    // 1) Branch from logged-in user (ensure your auth middleware sets req.user)
+    const branchId = req.user?.branch;
+    if (!branchId) {
+      return res.status(403).json({ message: 'User does not have a branch assigned.' });
+    }
+
+    // 2) Normalize to DAY (UTC) to match stored dates reliably
+    if (!payment_date) {
+      return res.status(400).json({ message: 'payment_date is required' });
+    }
+    const inDate = new Date(payment_date); // "YYYY-MM-DD" parses as UTC midnight
+    const start = new Date(Date.UTC(inDate.getUTCFullYear(), inDate.getUTCMonth(), inDate.getUTCDate()));
+    const end = new Date(Date.UTC(inDate.getUTCFullYear(), inDate.getUTCMonth(), inDate.getUTCDate() + 1));
+
+    // 3) Block duplicates (branch + date). Also add a unique index {branch:1, date:1} in schema.
+    const existing = await ClosingAccount.findOne({
+      branch: new mongoose.Types.ObjectId(branchId),
+      date: start
+    });
+    if (existing) {
+      return res.status(400).json({ message: 'Account already closed for this date.' });
+    }
+
+    // 4) INVOICES: single pass to get cash, credit, and total sales
+    const invoiceAgg = await Invoice.aggregate([
+      {
+        $match: {
+          branch: new mongoose.Types.ObjectId(branchId),
+          payment_date: { $gte: start, $lt: end }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          cashSales: {
+            $sum: {
+              $cond: [{ $eq: ['$sales_type', 'cash'] }, '$grand_total', 0]
+            }
+          },
+          creditSalesPos: {
+            $sum: {
+              $cond: [{ $eq: ['$sales_type', 'credit'] }, '$grand_total', 0]
+            }
+          },
+          totalSalesAll: { $sum: '$grand_total' } // cash + credit
+        }
+      }
+    ]);
+
+    const cashSales = invoiceAgg[0]?.cashSales || 0;
+    const creditSalesPos = invoiceAgg[0]?.creditSalesPos || 0;        // positive number
+    const totalSales = invoiceAgg[0]?.totalSalesAll || 0;              // ALL sales (cash + credit)
+    const totalCreditSales = -creditSalesPos;                          // store as negative per your convention
+
+    // 5) TRANSACTIONS: customer debtor payments (money collected)
+    const debtorAgg = await Transaction.aggregate([
+      {
+        $match: {
+          transactionType: 'Customer',
+          branch: new mongoose.Types.ObjectId(branchId),
+          paymentDate: { $gte: start, $lt: end }
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$amountReceived' } } }
+    ]);
+    const totalDebtorsPayment = debtorAgg[0]?.total || 0;
+
+    // 6) EXPENSES
+    const expenseAgg = await Expense.aggregate([
+      {
+        $match: {
+          branch: new mongoose.Types.ObjectId(branchId),
+          date: { $gte: start, $lt: end }
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    const totalExpenses = expenseAgg[0]?.total || 0;
+
+    // 7) BALANCES (note: totalCreditSales is negative)
+    const balance = totalSales + totalDebtorsPayment + totalCreditSales; // => cashSales + debtorPayments
+    const closingBalance = balance - totalExpenses;
+
+    // 8) SAVE snapshot
+    const closingAccount = new ClosingAccount({
+      branch: new mongoose.Types.ObjectId(branchId),
+      date: start, // normalized day
+      totalSales,
+      totalDebtorsPayment,
+      totalCreditSales, // negative number
+      balance,
+      totalExpenses,
+      closingBalance
+    });
+
+    await closingAccount.save();
+
+    return res.json({ message: 'Account closed successfully', closingAccount });
+  } catch (err) {
+    if (err?.code === 11000) {
+      return res.status(409).json({ message: 'Account already closed for this branch/date.' });
+    }
+    console.error(err);
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+
+
+
+// BACKUP 
+router.get("/backup", checkPermission("view-backup"), async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .populate("branch")
+      .populate("role");
+
+    if (!user) return res.redirect("/");
+
+    const selectedBranchId =
+      user.role.name.toLowerCase() === "owner"
+        ? req.selectedBranchId
+        : user.branch._id;
+
+    // Ensure backup folder exists
+    if (!fs.existsSync(backupsFolder)) {
+      fs.mkdirSync(backupsFolder, { recursive: true });
+    }
+
+    // Read backups log
+    const backupsLog = path.join(backupsFolder, "backups.json");
+    let backups = [];
+    if (fs.existsSync(backupsLog)) {
+      backups = JSON.parse(fs.readFileSync(backupsLog));
+    }
+
+    if (user.role.name.toLowerCase() === "owner") {
+      const selectedBranchDoc = req.allBranches.find(b =>
+        b._id.equals(selectedBranchId)
+      );
+      return res.render("Log/backup", {
+        user,
+        ownerBranch: { branch: selectedBranchDoc },
+        branches: req.allBranches,
+        selectedBranchId,
+        backups
+      });
+    } else {
+      return res.render("Log/backup", {
+        user,
+        ownerBranch: { branch: user.branch },
+        branches: [user.branch],
+        selectedBranchId,
+        backups
+      });
+    }
+  } catch (err) {
+    console.error("Error in /backup route:", err);
+    res.redirect("/error-404");
+  }
+});
+
+
+
+
+router.get('/download-backup/:timestamp', (req, res) => {
+  const folderName = `backup-${req.params.timestamp}`;
+  const backupPath = path.join(backupsFolder, folderName);
+
+  if (!fs.existsSync(backupPath)) {
+    return res.status(404).send('Backup not found');
+  }
+
+  const zipName = `${folderName}.zip`;
+  res.setHeader('Content-Disposition', `attachment; filename=${zipName}`);
+  res.setHeader('Content-Type', 'application/zip');
+
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.pipe(res);
+  archive.directory(backupPath, false);
+  archive.finalize();
+});
+
+
+
+if (!fs.existsSync(backupsFolder)) {
+  fs.mkdirSync(backupsFolder);
+}
+
+// Route to create backup
+router.post('/create-backup', (req, res) => {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupPath = `C:\\Users\\TECH MAYOR\\application-backup\\backup-${timestamp}`;
+
+  const mongoDumpPath = `"C:\\Program Files\\MongoDB\\Tools\\mongodb-database-tools-windows-x86_64-100.12.2\\bin\\mongodump.exe"`;
+
+  exec(`${mongoDumpPath} --db ajaliDB --out "${backupPath}"`, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Backup error: ${error.message}`);
+      console.error(stderr);
+      return res.status(500).send('Backup failed');
+    }
+
+    console.log(`Backup successful: ${backupPath}`);
+    console.log(stdout);
+
+    // Save backup log
+    const backupsLog = `C:\\Users\\TECH MAYOR\\application-backup\\backups.json`;
+    let backups = [];
+    if (fs.existsSync(backupsLog)) {
+      backups = JSON.parse(fs.readFileSync(backupsLog));
+    }
+    backups.push({
+      operator: req.user ? req.user.name : 'Unknown',
+      createdOn: new Date(),
+      path: backupPath,
+      timestamp // ✅ Save timestamp for download link
+    });
+    fs.writeFileSync(backupsLog, JSON.stringify(backups, null, 2));
+
+    res.redirect('/backup');
+  });
+});
+
 
 
 

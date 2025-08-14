@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"branch":{"$numberInt":"1"}},"name":"branch_1","background":true}],"uuid":"6883321c7a774a63903eafc3c836f5c3","collectionName":"supplierinvoices","type":"collection"}
