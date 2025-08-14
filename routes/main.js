@@ -5,6 +5,7 @@ const path = require('path')
 const archiver = require('archiver');
 const { exec } = require('child_process');
 const multer = require('multer');
+const moment = require('moment');
 const numberToWords = require('number-to-words');
 const mongoose = require("mongoose");
 
@@ -559,15 +560,34 @@ router.post("/create-customer", (req, res) => {
     });
 });
 
-router.get("/delete/customer/:id", (req,res)=>{
-  Customer.findByIdAndDelete(req.params.id)
-  .then(user =>{
-      res.redirect("/customer")
-      
-  })
-  .catch(err => console.log(err))
-  
-})
+router.get("/delete/customer/:id", async (req, res) => {
+  try {
+    // Find the customer first (for particulars)
+    const customer = await Customer.findById(req.params.id);
+
+    if (!customer) {
+      return res.status(404).send("Customer not found");
+    }
+
+    
+    await Customer.findByIdAndDelete(req.params.id);
+
+    await ActionLog.create({
+      action: "delete",
+      operator: req.user._id,
+      branch: req.user.branch,
+      particulars: `Deleted customer: ${customer.customer_name}`,
+      targetModel: "Customer",
+      targetId: customer._id
+    });
+
+    res.redirect("/customer");
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
 
 router.post("/update/customer/:id", async (req, res) => {
   try {
@@ -681,15 +701,33 @@ router.post("/addSupplier", (req, res, next) => {
       });
 });
 
-router.get("/delete/supplier/:id", (req,res)=>{
-  Supplier.findByIdAndDelete(req.params.id)
-  .then(supplier =>{
-      res.redirect("/supplier")
-      
-  })
-  .catch(err => console.log(err))
-  
-})
+router.get("/delete/supplier/:id", async (req, res) => {
+  try {
+    const supplier = await Supplier.findById(req.params.id);
+
+    if (!supplier) {
+      return res.status(404).send("Supplier not found");
+    }
+
+    await Supplier.findByIdAndDelete(req.params.id);
+
+    await ActionLog.create({
+      action: "delete",
+      operator: req.user._id,
+      branch: req.user.branch,
+      particulars: `Deleted supplier: ${supplier.supplier}`,
+      targetModel: "Supplier",
+      targetId: supplier._id
+    });
+
+    res.redirect("/supplier");
+
+  } catch (err) {
+    console.error("Error deleting supplier:", err);
+    res.status(500).send("Server error");
+  }
+});
+
 
 router.post("/update/supplier/:id", async (req, res, next) => {
   try {
@@ -869,17 +907,17 @@ router.post('/editInvoiceSuppliers', async (req, res) => {
     const amt = Number(amount);
     const newDate = new Date(payment_date);
 
-    // 1️⃣ Update the invoice
     await SupplierInvoice.updateOne(
       { _id: invoiceId },
       { supplier, invoice_type, amount: amt, payment_date: newDate, reason }
     );
 
-    // 2️⃣ Find the matching ledger entry
+    const updatedInvoice = await SupplierInvoice.findById(invoiceId)
+    .populate('supplier', 'supplier');
+
     const ledgerEntry = await SupplierLedger.findOne({ refNo: reason, supplier });
     if (!ledgerEntry) return res.status(404).send('Ledger entry not found');
 
-    // 3️⃣ Update the ledger entry fields based on the new type
     ledgerEntry.type = invoice_type;
     ledgerEntry.date = newDate;
     ledgerEntry.amount = invoice_type === 'debit' ? amt : 0;
@@ -906,6 +944,16 @@ router.post('/editInvoiceSuppliers', async (req, res) => {
       await entry.save();
     }
 
+     
+    await ActionLog.create({
+      action: "edit",
+      operator: req.user._id,
+      branch: req.user.branch,
+      particulars: `Edited supplier invoice  for ${updatedInvoice.supplier.supplier}, new type: ${invoice_type}, amount: ${amt}, date: ${newDate.toLocaleDateString()}`,
+      targetModel: "SupplierInvoice",
+      targetId: invoiceId
+    });
+
     return res.redirect('/SuppliersInvoice');
 
   } catch (err) {
@@ -917,13 +965,31 @@ router.post('/editInvoiceSuppliers', async (req, res) => {
 
 
 
-router.post('/deleteInvoiceSupplier', (req, res) => {
-  SupplierInvoice.findByIdAndDelete(req.body.invoiceId)
-    .then(() => res.redirect('/SuppliersInvoice'))
-    .catch(err => {
-      console.error('Delete failed:', err);
-      res.status(500).send('Failed to delete invoice.');
+router.post('/deleteInvoiceSupplier', async (req, res) => {
+  try {
+    const invoice = await SupplierInvoice.findById(req.body.invoiceId)
+    .populate('supplier', 'supplier');
+
+    if (!invoice) {
+      return res.status(404).send('Invoice not found.');
+    }
+
+    await SupplierInvoice.findByIdAndDelete(req.body.invoiceId);
+
+    await ActionLog.create({
+      action: "delete",
+      operator: req.user._id,
+      branch: req.user.branch,
+      particulars: `Deleted supplier invoice for supplier: ${invoice.supplier.supplier}, type: ${invoice.invoice_type}, amount: ${invoice.amount}`,
+      targetModel: "SupplierInvoice",
+      targetId: invoice._id
     });
+
+    res.redirect('/SuppliersInvoice');
+  } catch (err) {
+    console.error('Delete failed:', err);
+    res.status(500).send('Failed to delete invoice.');
+  }
 });
 
 // SUPPLIER ROUTE ENDS HERE 
@@ -979,7 +1045,7 @@ router.post("/update/loaner/:id", async (req, res, next) => {
     let updatedFields = {};
     let hasChanges = false;
 
-    // Only update fields that changed
+    // Only update fields that actually changed
     for (let key in updates) {
       if (
         updates[key] !== undefined &&
@@ -992,6 +1058,17 @@ router.post("/update/loaner/:id", async (req, res, next) => {
 
     if (hasChanges) {
       await Loan.findByIdAndUpdate(loanerId, updatedFields);
+
+      // ✅ Log the update
+      await ActionLog.create({
+        action: "edit",
+        operator: req.user._id,
+        branch: req.user.branch,
+        particulars: `Edited loaner: ${existingLoaner.loaner}, changes: ${JSON.stringify(updatedFields)}`,
+        targetModel: "Loan",
+        targetId: loanerId
+      });
+
       console.log("Loaner updated:", updatedFields);
     } else {
       console.log("No changes detected for loaner update.");
@@ -1004,15 +1081,35 @@ router.post("/update/loaner/:id", async (req, res, next) => {
     next(error); // Pass error to global handler
   }
 });
-router.get("/delete/loaner/:id", (req,res)=>{
-  Loan.findByIdAndDelete(req.params.id)
-  .then(supplier =>{
-      res.redirect("/loan")
-      
-  })
-  .catch(err => console.log(err))
-  
-})
+
+
+router.get("/delete/loaner/:id", async (req, res) => {
+  try {
+    const loan = await Loan.findById(req.params.id);
+
+    if (!loan) {
+      return res.status(404).send("Loan not found");
+    }
+
+    await Loan.findByIdAndDelete(req.params.id);
+
+    await ActionLog.create({
+      action: "delete",
+      operator: req.user._id,
+      branch: req.user.branch,
+      particulars: `Deleted loaner: ${loan.loaner}, mobile: ${loan.mobile}`,
+      targetModel: "Loan",
+      targetId: loan._id
+    });
+
+    res.redirect("/loan");
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
+
 
 
 router.post("/addLoaner", async (req, res, next) => {
@@ -1150,30 +1247,73 @@ router.post('/updateLoan/:loanId', async (req, res) => {
           'loans.$.loanContractEndDate': loanContractEndDate,
           'loans.$.details': details
         }
-      }
+      },
+      { new: true }
     );
+
+    if (loan) {
+      const updatedLoan = loan.loans.id(loanId);
+
+      await ActionLog.create({
+        action: "edit",
+        operator: req.user._id,
+        branch: req.user.branch,
+        particulars: `Updated loan for loaner: ${loan.loaner}, 
+                      Amount: ${loanAmount}, 
+                      Start: ${loanContractDate}, 
+                      End: ${loanContractEndDate}, 
+                      Details: ${details}`,
+        targetModel: "Loan",
+        targetId: loanId
+      });
+
+      console.log(`Loan updated for ${loan.loaner}:`, updatedLoan);
+    }
 
     res.redirect('/manageLoan');
   } catch (err) {
-    console.error(err);
+    console.error("Loan update failed:", err);
     res.status(500).send("Failed to update loan");
   }
 });
+
 
 router.delete('/deleteLoan/:loanId', async (req, res) => {
   const { loanId } = req.params;
 
   try {
+    const loanerDoc = await Loan.findOne({ 'loans._id': loanId });
+    if (!loanerDoc) {
+      return res.status(404).send("Loan not found");
+    }
+
+    const loanToDelete = loanerDoc.loans.id(loanId);
+
+    // Delete the loan
     await Loan.updateOne(
       { 'loans._id': loanId },
       { $pull: { loans: { _id: loanId } } }
     );
+
+    await ActionLog.create({
+      action: "delete",
+      operator: req.user._id,
+      branch: req.user.branch,
+      particulars: `Deleted loan for loaner: ${loanerDoc.loaner}, 
+                    Amount: ${loanToDelete.loanAmount}, 
+                    Start: ${loanToDelete.loanContractDate}, 
+                    End: ${loanToDelete.loanContractEndDate}`,
+      targetModel: "Loan",
+      targetId: loanId
+    });
+
     res.sendStatus(200);
   } catch (err) {
-    console.error(err);
+    console.error("Delete loan failed:", err);
     res.sendStatus(500);
   }
 });
+
 
 
 // LOAN ROUTE ENDS HERE 
@@ -1566,21 +1706,20 @@ router.post(
 
       if (!productDoc) return res.status(404).send('Product not found');
 
-      // ✅ Permission check: owner or same branch
-      if (user.role.name.toLowerCase() !== 'owner' &&
-          !productDoc.branch._id.equals(user.branch._id)) {
+      if (
+        user.role.name.toLowerCase() !== 'owner' &&
+        !productDoc.branch._id.equals(user.branch._id)
+      ) {
         return res.redirect('/unauthorized');
       }
 
       const branchId = productDoc.branch._id;
       const operator = req.user?._id || null;
 
-      // Soft delete product
       await Product.findByIdAndUpdate(productId, {
         $set: { status: 'deleted' }
       });
 
-      // Update StockLedger
       await StockLedger.updateMany(
         { product: productId, branch: branchId },
         {
@@ -1593,7 +1732,6 @@ router.post(
         }
       );
 
-      // Update ParkingStockLedger
       await ParkingStockLedger.updateMany(
         { product: productId, branch: branchId },
         {
@@ -1606,8 +1744,16 @@ router.post(
         }
       );
 
-      // Delete ParkingStock records
       await ParkingStock.deleteMany({ product: productId, branch: branchId });
+
+      await ActionLog.create({
+        action: "delete",
+        operator: operator,
+        branch: branchId,
+        particulars: `Deleted product: ${productDoc.product} from branch: ${productDoc.branch.branch_name}`,
+        targetModel: "Product",
+        targetId: productId
+      });
 
       res.redirect('/manageProduct');
     } catch (err) {
@@ -1725,6 +1871,7 @@ router.post(
         });
 
       if (!adjustment) return res.status(404).send('Adjustment not found');
+
       if (
         user.role.name.toLowerCase() !== 'owner' &&
         !adjustment.product.branch._id.equals(user.branch._id)
@@ -1734,6 +1881,15 @@ router.post(
 
       await StockAdjustment.findByIdAndDelete(req.params.id);
 
+      await ActionLog.create({
+        action: "delete",
+        operator: req.user?._id || null,
+        branch: adjustment.product.branch._id,
+        particulars: `Deleted stock adjustment for product: ${adjustment.product.product} in branch: ${adjustment.product.branch.branch_name}`,
+        targetModel: "StockAdjustment",
+        targetId: req.params.id
+      });
+
       res.redirect('/adjustStock');
     } catch (err) {
       console.error('Error deleting adjustment:', err);
@@ -1741,6 +1897,7 @@ router.post(
     }
   }
 );
+
 
 
 // router.get('/search-product', async (req, res) => {
@@ -1780,7 +1937,6 @@ router.post(
       const prod = await Product.findById(product).populate('branch');
       if (!prod) return res.status(404).send('Product not found');
 
-      // ✅ Permission check: owner can adjust any branch, others only their branch
       if (
         user.role.name.toLowerCase() !== 'owner' &&
         !prod.branch._id.equals(user.branch._id)
@@ -1799,7 +1955,6 @@ router.post(
       if (!targetVariant)
         return res.status(404).send(`Variant not found: ${selectedUnitCode}`);
 
-      // Adjust target variant quantity
       if (adjustmentType === 'increase') {
         targetVariant.quantity += adjustNum;
       } else if (adjustmentType === 'decrease') {
@@ -1811,7 +1966,6 @@ router.post(
         return res.status(400).send('Invalid adjustmentType');
       }
 
-      // Recalculate other variants
       const newBaseQty = !targetVariant.totalInBaseUnit
         ? targetVariant.quantity
         : targetVariant.quantity / targetVariant.totalInBaseUnit;
@@ -1824,7 +1978,6 @@ router.post(
 
       await prod.save();
 
-      // Generate stock_ID like ADJ-BR-001
       const branch = prod.branch;
       const prefix = branch.branch_name.toUpperCase().slice(0, 2);
       const stockPrefix = `ADJ-${prefix}-`;
@@ -1844,7 +1997,6 @@ router.post(
         '0'
       )}`;
 
-      // Create StockLedger
       await StockLedger.create({
         date: new Date(),
         product: prod._id,
@@ -1870,7 +2022,6 @@ router.post(
         notes: notes || ''
       });
 
-      // Create StockAdjustment record
       await StockAdjustment.create({
         product: prod._id,
         adjustedBy: user._id,
@@ -1882,6 +2033,15 @@ router.post(
             quantity: adjustNum
           }
         ]
+      });
+
+        await ActionLog.create({
+        action: "edit",
+        operator: user._id,
+        branch: branch._id,
+        particulars: `Stock ${adjustmentType} of ${adjustNum} ${selectedUnitCode} for product "${prod.product}" in "${branch.branch_name}" branch`,
+        targetModel: "Product",
+        targetId: prod._id
       });
 
       res.redirect('/adjustStock');
@@ -2011,6 +2171,15 @@ router.post(
         ]
       });
 
+        await ActionLog.create({
+        action: 'edit',
+        operator: operator,
+        branch: prod.branch._id,
+        particulars: `Price adjusted for ${prod.product} (${selectedUnitCode}) from ${oldPrice} to ${newPrice}. Notes: ${notes || 'N/A'}`,
+        targetModel: 'Product',
+        targetId: prod._id
+      });
+
       res.redirect('/price-adjustments');
     } catch (err) {
       console.error('Error adjusting price:', err);
@@ -2040,7 +2209,6 @@ router.post(
 
       if (!adjustment) return res.status(404).send('Price adjustment not found');
 
-      // Restrict deletion to owner or same branch
       if (
         user.role.name.toLowerCase() !== 'owner' &&
         !adjustment.product.branch._id.equals(user.branch._id)
@@ -2048,6 +2216,14 @@ router.post(
         return res.redirect('/unauthorized');
       }
 
+        await ActionLog.create({
+        action: 'delete',
+        operator: req.user._id,
+        branch: adjustment.product.branch._id,
+        particulars: `Deleted price adjustment for ${adjustment.product.product} (${adjustment.variants[0]?.unitCode || 'N/A'}) — Old Price: ${adjustment.variants[0]?.oldPrice || 'N/A'}, New Price: ${adjustment.variants[0]?.newPrice || 'N/A'}, Notes: ${adjustment.notes || 'N/A'}`,
+        targetModel: 'PriceAdjustment',
+        targetId: adjustment._id
+      });
       await PriceAdjustment.findByIdAndDelete(adjustmentId);
 
       res.redirect('/price-adjustments');
@@ -2474,11 +2650,9 @@ router.post('/edit-transfer', async (req, res, next) => {
       action: 'edit',
       operator: userId,
       branch: branch_from,
-      particulars: `Edited transfer #${oldTransfer.invoice_number}`,
+      particulars: `Edited transfer #${oldTransfer.invoice_number} (Qty: ${oldQty} → ${newQty})`,
       targetModel: 'TransferStock',
-      targetId: oldTransfer._id,
-      before: { quantity: oldQty },
-      after: { quantity: newQty }
+      targetId: oldTransfer._id
     });
 
     res.redirect('/stockTransfer');
@@ -2586,11 +2760,9 @@ router.post('/delete-transfer', async (req, res, next) => {
       action: 'delete',
       operator: userId,
       branch: branch_from,
-      particulars: `Deleted transfer #${invoice_number}`,
+      particulars: `Deleted transfer #${invoice_number} of ${oldQty} ${unitCode} to ${receivingBranchName}`,
       targetModel: 'TransferStock',
-      targetId: transferId,
-      before: { quantity: oldQty },
-      after: null
+      targetId: transferId
     });
 
     res.redirect('/stockTransfer');
@@ -3013,17 +3185,13 @@ router.post('/updateReceiveStock', async (req, res, next) => {
       { new: true, lean: true }
     );
 
-    // Log the edit in ActionLog
     await ActionLog.create({
       action: "edit",
       operator,
       branch,
       particulars: `Edited purchase invoice ${invoice_number}`,
       targetModel: "ReceivedStock",
-      targetId: originalStock._id,
-      before: originalStock,
-      after: updatedStock,
-      date: new Date()
+      targetId: originalStock._id
     });
 
     res.redirect('/purchase-stock');
@@ -3043,7 +3211,6 @@ router.post('/deleteReceiveStock', async (req, res, next) => {
       return res.status(400).send('Missing invoice number.');
     }
 
-    // Find the original ReceivedStock
     const originalStock = await ReceivedStock.findOne({ invoice_number }).populate('supplier');
     if (!originalStock) return res.status(404).send('Purchase not found.');
 
@@ -3052,7 +3219,6 @@ router.post('/deleteReceiveStock', async (req, res, next) => {
 
     if (!branch) return res.status(400).send('Missing branch.');
 
-    // Loop through items to reverse the stock
     for (const item of originalStock.items) {
       const product = await Product.findById(item.product);
       if (!product || !product.variants || product.variants.length === 0) continue;
@@ -3060,11 +3226,9 @@ router.post('/deleteReceiveStock', async (req, res, next) => {
       const baseIndex = product.variants.findIndex(v => v.unitCode === item.unitCode);
       if (baseIndex === -1) continue;
 
-      // Decrease the product stock
       product.variants[baseIndex].quantity -= item.item_qty;
       const baseQty = product.variants[baseIndex].quantity;
 
-      // Recalculate other variants
       for (let j = 0; j < product.variants.length; j++) {
         if (j !== baseIndex) {
           product.variants[j].quantity = baseQty * product.variants[j].totalInBaseUnit;
@@ -3073,11 +3237,10 @@ router.post('/deleteReceiveStock', async (req, res, next) => {
 
       await product.save();
 
-      // Add StockLedger entry marking stock_out
       await StockLedger.create({
         date: new Date(),
         product: product._id,
-        customer: originalStock.supplier?.supplier || '',  // supplier name
+        customer: originalStock.supplier?.supplier || '',
         operator,
         branch,
         stock_ID: 'delete',
@@ -3093,19 +3256,14 @@ router.post('/deleteReceiveStock', async (req, res, next) => {
       });
     }
 
-    // === CREATE ACTION LOG ===
     await ActionLog.create({
       action: 'delete',
       operator,
       branch,
       particulars: `Deleted purchase invoice ${invoice_number}`,
       targetModel: 'ReceivedStock',
-      targetId: originalStock._id,
-      before: originalStock,    // store the full doc before deletion
-      after: null
+      targetId: originalStock._id
     });
-
-    // Finally delete the ReceivedStock
     await ReceivedStock.deleteOne({ invoice_number });
 
     return res.redirect('/purchase-stock');
@@ -3680,39 +3838,80 @@ router.get('/searchProduct', async (req, res) => {
 router.post(
   "/updateStore",
   checkPermission("modify-store"),
-  (req, res) => {
-    const updateData = {
-      storeName: req.body.storeName
-    };
+  async (req, res, next) => {
+    try {
+      const { store_id, storeName } = req.body;
+      const userId = req.user?._id;
+      const branchId = req.user?.branch;
 
-    ParkingStore.findByIdAndUpdate(req.body.store_id, { $set: updateData }, { new: true })
-      .then(updatedDocument => {
-        res.redirect("/manageParkingStore");
-      })
-      .catch(err => {
-        console.error("Error updating document:", err);
-        res.status(500).send("Internal server error");
+      // Find the current store document
+      const store = await ParkingStore.findById(store_id);
+      if (!store) return res.status(404).send("Store not found");
+
+      const oldStoreName = store.storeName;
+
+      // Update the store
+      const updatedStore = await ParkingStore.findByIdAndUpdate(
+        store_id,
+        { $set: { storeName } },
+        { new: true }
+      );
+
+      // Create ActionLog
+      await ActionLog.create({
+        action: 'edit',
+        operator: userId,
+        branch: branchId,
+        particulars: `Updated Parking Store name from "${oldStoreName}" to "${storeName}"`,
+        targetModel: 'ParkingStore',
+        targetId: store._id
       });
+
+      res.redirect("/manageParkingStore");
+    } catch (err) {
+      console.error("Error updating store:", err);
+      next(err);
+    }
   }
 );
+
 
 
 router.get(
   "/deleteStore/:id",
   checkPermission("delete-store"),
-  (req, res) => {
-    const storeId = req.params.id;
+  async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) return res.redirect('/');
 
-    ParkingStore.findByIdAndDelete(storeId)
-      .then(() => {
-        res.redirect("/manageParkingStore");
-      })
-      .catch(err => {
-        console.error("Error deleting store:", err);
-        res.redirect("/error-404");
+      const storeId = req.params.id;
+      const userId = req.user?._id;
+      const branchId = req.user?.branch;
+
+      const store = await ParkingStore.findById(storeId);
+      if (!store) return res.redirect("/manageParkingStore");
+
+      // Delete the store
+      await ParkingStore.findByIdAndDelete(storeId);
+
+      // Create ActionLog
+      await ActionLog.create({
+        action: 'delete',
+        operator: userId,
+        branch: branchId,
+        particulars: `Deleted Parking Store: ${store.storeName || store._id}`,
+        targetModel: 'ParkingStore',
+        targetId: store._id
       });
+
+      res.redirect("/manageParkingStore");
+    } catch (err) {
+      console.error("Error deleting store:", err);
+      next(err);
+    }
   }
 );
+
 
 
 // STORE ENDS HERE ----------------- TECH MAYOR GROUPS
@@ -4366,27 +4565,66 @@ router.post("/addExpense", checkPermission("add-expenses"), async (req, res) => 
 
 
 // Update Expense
-router.post('/updateExpense', (req, res) => {
-  const { expenseId, title, description, category, date, amount } = req.body;
+router.post('/updateExpense', async (req, res, next) => {
+  try {
+    const { expenseId, title, description, category, date, amount } = req.body;
+    const operator = req.user?._id;
+    const branch = req.user?.branch;
 
-  Expense.findByIdAndUpdate(expenseId, {
-    title, description, category, date, amount
-  })
-    .then(() => res.redirect('/expense'))
-    .catch(err => {
-      console.error('Update failed:', err);
-      res.status(500).send("Failed to update expense.");
+    if (!expenseId) return res.status(400).send('Missing expense ID');
+
+    // Find the existing expense
+    const existingExpense = await Expense.findById(expenseId);
+    if (!existingExpense) return res.status(404).send('Expense not found');
+
+    // Update the expense
+    await Expense.findByIdAndUpdate(expenseId, { title, description, category, date, amount });
+
+    // Create ActionLog
+    await ActionLog.create({
+      action: 'edit',
+      operator,
+      branch,
+      particulars: `Updated expense: ${title || existingExpense.title} - Amount: ${amount || existingExpense.amount}`,
+      targetModel: 'Expense',
+      targetId: expenseId
     });
+
+    res.redirect('/expense');
+  } catch (err) {
+    console.error('Update failed:', err);
+    next(err);
+  }
 });
 
+
 // Delete Expense
-router.post('/deleteExpense', (req, res) => {
-  Expense.findByIdAndDelete(req.body.expenseId)
-    .then(() => res.redirect('/expense'))
-    .catch(err => {
-      console.error('Delete failed:', err);
-      res.status(500).send("Failed to delete expense.");
+router.post('/deleteExpense', async (req, res, next) => {
+  try {
+    const { expenseId } = req.body;
+    const operator = req.user?._id;
+    const branch = req.user?.branch;
+
+    if (!expenseId) return res.status(400).send('Missing expense ID');
+
+    const expense = await Expense.findById(expenseId);
+    if (!expense) return res.status(404).send('Expense not found');
+
+    await Expense.findByIdAndDelete(expenseId);
+
+    await ActionLog.create({
+      action: 'delete',
+      operator,
+      branch,
+      particulars: `Deleted expense: ${expense.description || expense.title || 'No description'} - Amount: ${expense.amount}`,      targetModel: 'Expense',
+      targetId: expense._id
     });
+
+    res.redirect('/expense');
+  } catch (err) {
+    console.error('Delete failed:', err);
+    next(err);
+  }
 });
 
 
@@ -5278,67 +5516,75 @@ router.get('/api/suppliers/search', async (req, res) => {
 
 
 // LOGS STARTS HERE 
-router.get("/view-log", async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/");
+router.get(
+  "/view-log",
+  checkPermission("view-log"), // ✅ uses your middleware
+  async (req, res) => {
+    try {
+      const currentSort = req.query.sort || "recently";
+      const user = req.user; // ✅ already populated by middleware
 
-  try {
-    const selectedBranchId = req.query.branchId;
-    const currentSort = req.query.sort || 'recently';
+      let branchesToUse;
+      let selectedBranchId;
+      let ownerBranch;
 
-    const user = await User.findById(req.user._id).populate("branch");
-    if (!user) return res.redirect("/");
+      if (user.role.name.toLowerCase() === "owner") {
+        branchesToUse = req.allBranches;
+        selectedBranchId = req.selectedBranchId;
 
-    let branchToFilter = selectedBranchId || user.branch._id;
+        ownerBranch = branchesToUse.find(b =>
+          b._id.equals(selectedBranchId)
+        );
+      } else {
+        branchesToUse = [user.branch];
+        selectedBranchId = user.branch._id;
+        ownerBranch = user.branch;
+      }
 
-    let sortQuery = { date: -1 };
-    if (currentSort === "ascending") sortQuery = { date: 1 };
-    else if (currentSort === "descending") sortQuery = { date: -1 };
+      // Sorting
+      let sortQuery = { date: -1 };
+      if (currentSort === "ascending") sortQuery = { date: 1 };
 
-    let logQuery = { branch: branchToFilter };
-
-    if (currentSort === "today") {
+      // Date filtering
+      let logQuery = { branch: selectedBranchId };
       const today = new Date();
-      today.setHours(0,0,0,0);
-      logQuery.date = { $gte: today };
-    } else if (currentSort === "lastMonth") {
-      const lastMonth = new Date();
-      lastMonth.setMonth(lastMonth.getMonth() - 1);
-      logQuery.date = { $gte: lastMonth };
-    } else if (currentSort === "last7days") {
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      logQuery.date = { $gte: sevenDaysAgo };
+      today.setHours(0, 0, 0, 0);
+
+      if (currentSort === "today") {
+        logQuery.date = { $gte: today };
+      } else if (currentSort === "lastMonth") {
+        const lastMonth = new Date();
+        lastMonth.setMonth(lastMonth.getMonth() - 1);
+        lastMonth.setHours(0, 0, 0, 0);
+        logQuery.date = { $gte: lastMonth };
+      } else if (currentSort === "last7days") {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+        logQuery.date = { $gte: sevenDaysAgo };
+      }
+
+      // Fetch logs
+      const logs = await ActionLog.find(logQuery)
+        .populate("operator", "fullname email")
+        .sort(sortQuery);
+
+      res.render("Log/logs", {
+        user,
+        ownerBranch: { branch: ownerBranch },
+        branches: branchesToUse,
+        selectedBranchId,
+        currentSort,
+        logs,
+        moment
+      });
+    } catch (err) {
+      console.error("Error fetching logs:", err);
+      res.redirect("/error-404");
     }
-
-    let allBranches = [];
-    let ownerBranch = null;
-
-    if (user.role === 'owner') {
-      allBranches = await Branch.find();
-      ownerBranch = await Branch.findById(branchToFilter);
-    } else {
-      allBranches = [user.branch];
-      ownerBranch = user.branch;
-    }
-
-    const logs = await ActionLog.find(logQuery)
-      .populate('operator')
-      .sort(sortQuery);
-
-    res.render("Log/logs", {
-      user,
-      ownerBranch: { branch: ownerBranch },
-      branches: allBranches,
-      selectedBranchId: branchToFilter,
-      currentSort,
-      logs
-    });
-
-  } catch (err) {
-    console.error("Error fetching logs:", err);
-    res.redirect("/error-404");
   }
-});
+);
+
 
 
 

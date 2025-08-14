@@ -33,14 +33,6 @@ const actionLogSchema = new Schema({
     type: Schema.Types.ObjectId,
     required: true
   },
-  before: {
-    type: Schema.Types.Mixed,
-    default: null
-  },
-  after: {
-    type: Schema.Types.Mixed,
-    default: null
-  }
 });
 
 module.exports = mongoose.model('ActionLog', actionLogSchema);

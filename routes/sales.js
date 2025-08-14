@@ -425,6 +425,15 @@ router.post('/editPayment', async (req, res) => {
     transaction.paymentDate = paymentDate;
     await transaction.save();
 
+      await ActionLog.create({
+      action: 'edit',
+      operator: req.user?._id,
+      branch: branch,
+      particulars: `Edited payment for receipt ${receiptNo}: Old Paid ${oldPaid}, New Paid ${newPaid}`,
+      targetModel: 'Transaction',
+      targetId: transaction._id
+    });
+
     return res.redirect(`/cash-receipt/${transaction._id}`);
   } catch (err) {
     console.error('Edit Payment Error:', err);
@@ -452,24 +461,20 @@ router.post('/deletePayment', async (req, res) => {
 
     if (!oldLedger) return res.status(404).json({ error: 'Ledger not found' });
 
-    // 1. Mark old ledger as deleted
     oldLedger.status = 'deleted';
     await oldLedger.save();
 
-    // 2. Calculate new balance
     const updatedBalance = customer.total_debt - amountReceived;
 
-    // 3. Update customer balances
     customer.total_debt = updatedBalance;
     customer.remaining_amount = updatedBalance;
     await customer.save();
 
-    // 4. Create a new ledger entry to reflect this update
     await CustomerLedger.create({
       customer: customer._id,
       branch: branch,
       type: 'payment',
-      refNo: receiptNo, // or `${receiptNo}-DEL`
+      refNo: receiptNo,
       date: paymentDate,
       amount: 0,
       paid: 0,
@@ -477,9 +482,16 @@ router.post('/deletePayment', async (req, res) => {
       status: 'normal'
     });
 
-    // 5. Optionally delete or soft-delete the transaction
     await Transaction.findByIdAndDelete(transactionId);
 
+      await ActionLog.create({
+      action: 'delete',
+      operator,
+      branch,
+      particulars: `Deleted payment for receipt ${receiptNo} - Amount: ${amountReceived}`,
+      targetModel: 'Transaction',
+      targetId: transaction._id
+    });
     return res.redirect('/transactions?deleted=1');
   } catch (err) {
     console.error('Delete Payment Error:', err);
@@ -917,6 +929,15 @@ if (soldQty === prevQty) {
     }
 
     await customer.save();
+
+      await ActionLog.create({
+      action: 'edit',
+      operator: req.user._id,
+      branch: branchId,
+      particulars: `Updated invoice #${receipt_no} for customer ${customer.customer_name} - Grand Total: ${grandTotalNum}`,
+      targetModel: 'Invoice',
+      targetId: invoice._id
+    });
 
     res.redirect(`/receipt/${invoice._id}`);
   } catch (err) {

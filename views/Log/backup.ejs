@@ -146,22 +146,20 @@
 											<table class="table">
 												<thead class="thead-light">
 													<tr>
-														<th>Operator</th>
 														<th>Created On</th>
 														<th class="no-sort text-end"></th>
 													</tr>
 												</thead>
 												 <tbody>
-    <% backups.forEach(backup => { %>
-      <tr>
-        <td><%= backup.operator %></td>
-        <td><%= new Date(backup.createdOn).toLocaleString() %></td>
-        <td class="text-end">
-			<a href="/download-backup/<%= backup.timestamp %>" class="btn btn-sm btn-success">Download</a>
-        </td>
-      </tr>
-    <% }) %>
-  </tbody>
+													<% backups.forEach(backup => { %>
+													<tr>
+														<td><%= new Date(backup.createdOn).toLocaleString() %></td>
+														<td class="text-end">
+															<a href="/download-backup/<%= backup.timestamp %>" class="btn btn-sm btn-success">Download</a>
+														</td>
+													</tr>
+													<% }) %>
+												</tbody>
 											</table>
 										</div>
 									</div>
